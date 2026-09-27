@@ -62,7 +62,7 @@ function cam3D(c, state) {
   c.translate(W / 2, H / 2);
   c.scale(scale, scale);
   c.rotate(turn);
-  c.translate(-sx - targetX, -sy - targetY);
+  c.translate(-sx, -sy);
 }
 // Dip through dark paper between full-frame scenes (the stage uses its curtain).
 function dipCut(c, tau, dur, a = .5) { const k = Math.max(1 - clamp(tau / a, 0, 1), clamp((tau - dur + a) / a, 0, 1)); if (k <= 0) return; resetT(c); c.save(); c.globalAlpha = easeInOutSine(k); c.fillStyle = '#17110c'; c.fillRect(0, 0, W, H); c.restore(); }

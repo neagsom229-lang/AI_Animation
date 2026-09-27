@@ -58,25 +58,42 @@ const SCENES = [
     handText(c, 'MOUNT MERU (3D ROTATION)', 600, 275, 34, span(1.8, 2.8, tau), {col: '#76523a'});
     angkorFlat(c, 1510, 758, .35);
 
-    const m = tau < 4 ? walk3D(tau, 0, 4, [1510, 920], [1350, 920]) : tau < 18 ? walk3D(tau, 4, 18, [1350, 920], [760, 920]) : walk3D(tau, 18, 22, [760, 920], [690, 920]);
     const walking = tau > 2 && tau < 22;
-    pp(c, m.x, m.y + m.bobY * 3, 1.12, {
-      body: T.red, hat: 'mokot', dir: -1, arms: walking ? 'down' : 'up',
-      walk: walking ? tau * 0.72 : null, mood: tau > 22 ? 'star' : 'happy', t: tau,
-      walk: walking ? m.walk : null,
-      armSwingL: m.armSwingL, armSwingR: m.armSwingR,
-      elbowL: m.elbowL, elbowR: m.elbowR,
-      legSwingL: m.legSwingL, legSwingR: m.legSwingR,
-      kneeL: m.kneeL, kneeR: m.kneeR,
-      hipSway: m.hipSway, shoulderSway: m.shoulderSway,
-      torsoYaw: m.torsoYaw, headYaw: m.headYaw, headPitch: m.headPitch,
-      bobY: m.bobY, breathe: m.breathe, clothSway: m.clothSway
+    const kingWalk = walk3D(tau, 2, 22, [1510, 920], [690, 920]);
+    const kingY = kingWalk.y + kingWalk.bobY * 3;
+    const kingDepth = 0.85 + (kingY - 700) / 1000 * 0.3;
+    pp(c, kingWalk.x, kingY, 1.12 * kingDepth, {
+      body: T.red, hat: 'mokot', dir: -1,
+      arms: walking ? 'down' : 'up',
+      walk: walking ? kingWalk.walk * 0.72 : null,
+      armSwingL: kingWalk.armSwingL,
+      armSwingR: kingWalk.armSwingR,
+      legSwingL: kingWalk.legSwingL,
+      legSwingR: kingWalk.legSwingR,
+      kneeL: kingWalk.kneeL,
+      kneeR: kingWalk.kneeR,
+      hipSway: kingWalk.hipSway,
+      torsoYaw: kingWalk.torsoYaw,
+      headYaw: tau > 18 ? -0.3 : kingWalk.headYaw,
+      bobY: kingWalk.bobY,
+      breathe: kingWalk.breathe,
+      mood: tau > 22 ? 'star' : 'happy',
+      t: tau
     });
+
     for (let k = 0; k < 3; k++) {
-      const i = idle3D(tau + k * 0.15);
-      pp(c, 1130 + k * 105, 920, .76, {body: [T.teal, T.orange, T.navy][k], hat: 'hair', arms: tau > 10 ? 'cheer' : 'pray', mood: 'happy', t: tau + k, ...i});
+      const y = 920;
+      const depth = 0.85 + (y - 700) / 1000 * 0.3;
+      const i = idle3D(tau + k * 0.7);
+      pp(c, 1130 + k * 105, y, .76 * depth, {
+        body: [T.teal, T.orange, T.navy][k], hat: 'hair',
+        arms: tau > 10 ? 'cheer' : 'pray', mood: 'happy',
+        bobY: i.bobY, breathe: i.breathe,
+        headYaw: i.headYaw, headPitch: i.headPitch,
+        t: tau + k
+      });
     }
-    emote(c, tau, 3.2, m.x, 610, 'idea', {t1: 5.3});
+    emote(c, tau, 3.2, kingWalk.x, 610, 'idea', {t1: 5.3});
   }},
   {...timing30('quarry'), name: 'quarry', mood: 'dust', camera: fixed(960, 540, 1.05), set(c, tau) {
     mountainT(c, 390, 800, .95, tau, {fall: false});
@@ -84,10 +101,26 @@ const SCENES = [
     for (let k = 0; k < 6; k++) blockT(c, 268 + k * 68, 754, 55, 44);
     blockT(c, 760, 752, 172, 112);
     for (let k = 0; k < 3; k++) {
-      const x = 610 + k * 260, working = Math.sin(tau * .8 + k) > -.72;
+      const x = 610 + k * 260, y = 916, working = Math.sin(tau * .8 + k) > -.72;
       const hammer = working ? Math.sin(tau * 8 + k) * 18 : 0;
-      const i = idle3D(tau + k * 0.15);
-      pp(c, x, 916, .86, {body: [T.teal, T.orange, T.red][k], hat: 'hair', arms: working ? 'hold' : 'down', walk: working ? tau * 1.2 + k + k * 0.15 : null, t: tau + k, ...i});
+      const swing = working ? Math.sin(tau * 6 + k) * 0.7 : 0;
+      const depth = 0.85 + (y - 700) / 1000 * 0.3;
+      pp(c, x, y, .86 * depth, {
+        body: [T.teal, T.orange, T.red][k], hat: 'hair',
+        arms: working ? 'hold' : 'down',
+        walk: working ? tau * 1.2 + k : null,
+        armSwingL: swing,
+        armSwingR: swing,
+        elbowL: 0.5 + Math.abs(swing) * 0.3,
+        elbowR: 0.5 + Math.abs(swing) * 0.3,
+        torsoYaw: swing * 0.2,
+        lean: swing * 0.3,
+        kneeL: 0.3 + swing * 0.2,
+        kneeR: 0.3 + swing * 0.2,
+        headPitch: -0.2 - swing * 0.2,
+        hipSway: swing * 0.3,
+        t: tau + k
+      });
       mk(c, [[x + 24, 804], [x + 62, 770 + hammer]], {w: 8, color: '#765036'});
       if (working) sparkle(c, x + 64, 769 + hammer, .42, .35 + .35 * Math.sin(tau * 12 + k) ** 2);
     }
@@ -104,8 +137,22 @@ const SCENES = [
     const waterY = 724;
     waveRoller(c, waterY, tau, {col: '#67b2c7', dk: '#3b8297', h: 360, amp: 13});
     for (let k = 0; k < 3; k++) {
-      const x = ((tau * (47 + k * 8) + k * 770 + 180) % 2540) - 300, y = 770 + Math.sin(tau * 1.5 + k) * 10;
-      raftT(c, x, y, .82 + (k % 2) * .12, tau + k);
+      const raftX = ((tau * (47 + k * 8) + k * 770 + 180) % 2540) - 300, y = 770 + Math.sin(tau * 1.5 + k) * 10;
+      raftT(c, raftX, y, .82 + (k % 2) * .12, tau + k);
+      const stroke = Math.sin(tau * 3.5 + k * 0.5);
+      const rowerY = 760;
+      const depth = 0.85 + (rowerY - 700) / 1000 * 0.3;
+      pp(c, raftX + 40, rowerY, .65 * depth, {
+        body: T.orange, hat: 'hair', arms: 'row',
+        armSwingL: stroke * 0.9,
+        armSwingR: -stroke * 0.9,
+        elbowL: 0.4 + Math.abs(stroke) * 0.3,
+        elbowR: 0.4 + Math.abs(stroke) * 0.3,
+        torsoYaw: stroke * 0.25,
+        hipSway: stroke * 0.3,
+        bobY: Math.abs(stroke) * 0.2,
+        t: tau
+      });
     }
     for (let k = 0; k < 2; k++) {
       const ex = 2020 - ((tau * 32 + k * 870) % 1540);
@@ -113,8 +160,17 @@ const SCENES = [
       sh(c, rr(ex - 338, 918, 176, 16, 5), '#946342', {w: 4});
       mk(c, [[ex - 162, 894], [ex - 96, 835], [ex - 44, 842]], {w: 4, color: '#805b3e'});
       elephantT(c, ex, 948, .62, tau * .75 + k, {walk: true, rider: g => {
-        const i = idle3D(tau);
-        pp(g, 0, -6, .65, {body: T.orange, hat: 'hair', arms: 'hold', t: tau, ...i});
+        const sway = Math.sin(tau * 1.5 + k) * 0.5;
+        const depth = 0.85 + (948 - 700) / 1000 * 0.3;
+        pp(g, 0, -6, .65 * depth, {
+          body: T.orange, hat: 'hair', arms: 'hold',
+          hipSway: sway,
+          torsoYaw: sway * 0.6,
+          headYaw: sway * 0.3,
+          bobY: Math.abs(sway) * 0.4,
+          breathe: 0.5 + Math.sin(tau * 0.5) * 0.5,
+          t: tau
+        });
       }});
     }
     for (let k = 0; k < 8; k++) { const x = (k * 231 + tau * (18 + k % 3 * 5)) % 1940; mk(c, [[x, 735 + (k % 3) * 35], [x + 24 + 12 * Math.sin(tau * 2 + k), 739 + (k % 3) * 35]], {w: 3, color: '#f6e6b4', al: .62}); }
@@ -136,20 +192,22 @@ const SCENES = [
       mk(c, [[x - 2, y - 22], [x + 24, y - 22]], {w: 2.4, color: '#795b3b', al: .7});
     }
     for (let k = 0; k < 4; k++) {
-      const x = 340 + ((tau * 28 + k * 390) % 1240), working = Math.sin(tau * .7 + k) > -.8;
-      const m = walk3D(tau, 0, 30, [x, 950], [x + 10, 950], {stride: 80});
-      const i = idle3D(tau + k * 0.15);
-      pp(c, m.x, m.y + m.bobY * 3, .78, {
-        body: [T.teal, T.red, T.orange][k % 3], hat: 'hair', arms: working ? 'hold' : 'down',
-        walk: working ? m.walk + k * 0.15 : null, t: tau + k,
-        ...i,
-        armSwingL: m.armSwingL, armSwingR: m.armSwingR,
-        elbowL: m.elbowL, elbowR: m.elbowR,
-        legSwingL: m.legSwingL, legSwingR: m.legSwingR,
-        kneeL: m.kneeL, kneeR: m.kneeR,
-        hipSway: m.hipSway, shoulderSway: m.shoulderSway,
-        torsoYaw: m.torsoYaw, headYaw: m.headYaw, headPitch: m.headPitch,
-        bobY: m.bobY, breathe: m.breathe, clothSway: m.clothSway
+      const x = 340 + ((tau * 28 + k * 390) % 1240), y = 950, working = Math.sin(tau * .7 + k) > -.8;
+      const carve = working ? Math.sin(tau * 5 + k) * 0.6 : 0;
+      const depth = 0.85 + (y - 700) / 1000 * 0.3;
+      pp(c, x, y, .78 * depth, {
+        body: [T.teal, T.red, T.orange][k % 3], hat: 'hair',
+        arms: working ? 'hold' : 'down',
+        walk: working ? tau * 1.4 + k * 0.15 : null,
+        armSwingL: carve,
+        armSwingR: carve,
+        elbowL: 0.55, elbowR: 0.55,
+        torsoYaw: carve * 0.25,
+        headPitch: -0.25,
+        hipSway: carve * 0.3,
+        bobY: Math.abs(carve) * 0.15,
+        breathe: 0.4,
+        t: tau + k
       });
       mk(c, [[x + 25, 836], [x + 74, 790 + (working ? Math.sin(tau * 8 + k) * 13 : 0)]], {w: 7, color: '#765036'});
       if (working) sparkle(c, x + 76, 788, .38, .55);
@@ -168,23 +226,21 @@ const SCENES = [
     c.save(); c.globalAlpha = .25; c.translate(0, 1.42 * y); c.scale(1, -.42); angkorFlat(c, 960, y, .72); c.restore();
     angkorFlat(c, 960, y, .72);
     for (let k = 0; k < 20; k++) { const x = 190 + k * 80; mk(c, [[x, 770 + (k % 2) * 13], [x + 38 + Math.sin(tau * 1.3 + k) * 12, 772 + (k % 2) * 13]], {w: 3, color: '#f4d294', al: .48}); }
-    for (let k = 0; k < 7; k++) {
-      const startX = 260 + k * 235;
-      const m = walk3D(tau, 0, 30, [startX, 948], [startX + 50, 948], {stride: 80});
-      pp(c, m.x, m.y + m.bobY * 3, .64, {
-        body: '#343442', skin: '#343442', hat: 'hair',
-        arms: k % 3 === 0 ? 'up' : 'down',
-        walk: m.walk + k * 0.15,
-        t: tau + k,
-        armSwingL: m.armSwingL, armSwingR: m.armSwingR,
-        elbowL: m.elbowL, elbowR: m.elbowR,
-        legSwingL: m.legSwingL, legSwingR: m.legSwingR,
-        kneeL: m.kneeL, kneeR: m.kneeR,
-        hipSway: m.hipSway, shoulderSway: m.shoulderSway,
-        torsoYaw: m.torsoYaw, headYaw: m.headYaw, headPitch: m.headPitch,
-        bobY: m.bobY, breathe: m.breathe, clothSway: m.clothSway
-      });
-    }
+    
+    const y1 = 950;
+    const d1 = 0.85 + (y1 - 700) / 1000 * 0.3;
+    const i1 = idle3D(tau);
+    const i2 = idle3D(tau + 1.5);
+    pp(c, 800, y1, 1.0 * d1, {
+      body: T.orange, hat: 'hair', arms: 'rest', mood: 'happy',
+      bobY: i1.bobY, breathe: i1.breathe, headYaw: -0.2, headPitch: i1.headPitch,
+      t: tau
+    });
+    pp(c, 1080, y1, 0.95 * d1, {
+      body: T.teal, hat: 'hair', arms: 'rest', mood: 'happy',
+      bobY: i2.bobY, breathe: i2.breathe, headYaw: -0.25, headPitch: i2.headPitch,
+      t: tau
+    });
     flagT(c, 1450, 850, 160, tau, span(.8, 3, tau));
   }},
 ];
