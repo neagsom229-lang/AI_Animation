@@ -72,3 +72,60 @@ function glowLight(c, x, y, r, col = '#ffe7a8', k = 1) {
   const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, alpha(col, .95 * k)); g.addColorStop(.18, alpha(col, .55 * k)); g.addColorStop(1, alpha(col, 0));
   c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); c.restore();
 }
+
+// ---------- 3D character action helpers ----------
+function walk3D(tau, t0, t1, a, b, opts = {}) {
+  const u = clamp((tau - t0) / (t1 - t0), 0, 1);
+  const pos = lerp2(a, b, u);
+  const x = pos[0], y = pos[1];
+  const walk = stepPhase(x, opts.stride || 80);
+  return {
+    x, y,
+    walk,
+    legSwingL: Math.sin(walk * TAU),
+    legSwingR: Math.sin(walk * TAU + Math.PI),
+    kneeL: Math.max(0, Math.sin(walk * TAU - 0.5)) * 0.7,
+    kneeR: Math.max(0, Math.sin(walk * TAU + Math.PI - 0.5)) * 0.7,
+    armSwingL: Math.sin(walk * TAU + Math.PI) * 0.7,
+    armSwingR: Math.sin(walk * TAU) * 0.7,
+    elbowL: 0.25 + Math.max(0, Math.sin(walk * TAU)) * 0.15,
+    elbowR: 0.25 + Math.max(0, Math.sin(walk * TAU + Math.PI)) * 0.15,
+    bobY: -Math.cos(walk * TAU * 2) * 0.5,
+    hipSway: Math.sin(walk * TAU + Math.PI/2) * 0.6,
+    shoulderSway: -Math.sin(walk * TAU + Math.PI/2) * 0.6,
+    torsoYaw: Math.sin(walk * TAU) * 0.15,
+    headYaw: Math.sin(walk * TAU) * 0.08,
+    headPitch: -Math.abs(Math.sin(walk * TAU * 2)) * 0.05,
+    breathe: 0.5 + Math.sin(tau * 0.4) * 0.5,
+    clothSway: -Math.sin(walk * TAU * 0.5) * 0.3,
+  };
+}
+
+function idle3D(tau) {
+  return {
+    bobY: Math.sin(tau * 2.2) * 1.2,
+    breathe: 0.5 + Math.sin(tau * 1.5) * 0.5,
+    headYaw: Math.sin(tau * 0.8) * 0.05,
+    headPitch: Math.sin(tau * 1.2) * 0.03,
+  };
+}
+
+function turn3D(tau, t0, t1, from, to) {
+  const u = span(t0, t1, tau, easeInOutSine);
+  return lerp(from, to, u);
+}
+
+function jump3D(tau, t0, t1) {
+  const u = clamp((tau - t0) / (t1 - t0), 0, 1);
+  const airborne = u > 0 && u < 1;
+  const jumpH = Math.sin(u * Math.PI) * 100;
+  return {
+    x: 0,
+    y: -jumpH,
+    airborne,
+    kneeL: airborne ? 0.8 : 0,
+    kneeR: airborne ? 0.8 : 0,
+    armSwingL: airborne ? -0.5 : 0,
+    armSwingR: airborne ? 0.5 : 0,
+  };
+}
