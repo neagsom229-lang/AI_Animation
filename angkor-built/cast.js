@@ -5,7 +5,13 @@
 // gesture, gp, walk, t, dir} so the director can drive it.
 
 // Face features in local head coordinates (head radius r).
-function face(c, r, {mood = 'happy', mouth = 0, blink = false, look = 0, cheeks = true} = {}) {
+function face(c, r, {mood = 'happy', mouth = 0, blink = false, look = 0, cheeks = true, headYaw = 0} = {}) {
+  const yawShift = headYaw * 6;
+  const scaleX = 1 - Math.abs(headYaw) * 0.25;
+  c.save();
+  c.translate(yawShift, 0);
+  c.scale(scaleX, 1);
+
   const ex = r * .36, ey = -r * .05, w = Math.max(3, r * .09);
   if (blink || mood === 'happy') { for (const sg of [-1, 1]) mk(c, [[sg * ex - r * .13 + look * 3, ey + r * .04], [sg * ex + look * 3, ey - r * .1], [sg * ex + r * .13 + look * 3, ey + r * .04]], {w}); }
   else if (mood === 'star') { for (const sg of [-1, 1]) sh(c, xf([[0, -1, 1], [.25, -.25, 1], [1, 0, 1], [.25, .25, 1], [0, 1, 1], [-.25, .25, 1], [-1, 0, 1], [-.25, -.25, 1]], sg * ex, ey, r * .2), T.white, {w: w * .8, tex: false}); }
@@ -17,6 +23,7 @@ function face(c, r, {mood = 'happy', mouth = 0, blink = false, look = 0, cheeks 
   else if (mood === 'neutral' && mouth <= .05) mk(c, [[-r * .14, my], [r * .14, my]], {w});
   else { const h = r * (.1 + .2 * Math.max(mood === 'happy' || mood === 'star' ? .5 : 0, mouth)); sh(c, [[-r * .22, my - h * .2, 1], [r * .22, my - h * .2, 1], [r * .14, my + h * .6], [0, my + h * .8], [-r * .14, my + h * .6]], '#6b2a22', {w: w * .8, tex: false}); }
   if (cheeks) for (const sg of [-1, 1]) { c.fillStyle = 'rgba(232,110,110,.35)'; c.beginPath(); c.ellipse(sg * r * .62, r * .22, r * .14, r * .09, 0, 0, TAU); c.fill(); }
+  c.restore();
 }
 
 // ---------- Grandpa Sok ----------
@@ -77,7 +84,6 @@ function grandpa(c, x, y, s, st = {}) {
 }
 
 // ---------- the company ----------
-// o: {body, skin, hat, mood, arms: 'down'|'up'|'pray'|'point'|'hold'|'row'|'dance', walk, t, h (height scale), prop}
 const HATS = {
   mokot: (c, r) => { sh(c, [[-r * .7, -r * .62, 1], [r * .7, -r * .62, 1], [r * .62, -r * .9, 1], [-r * .62, -r * .9, 1]], T.gold, {w: 4}); sh(c, [[-r * .5, -r * .9, 1], [0, -r * 2.1, 1], [r * .5, -r * .9, 1]], T.gold, {w: 4.4}); for (const f of [.35, .65]) mk(c, [[-r * .5 * (1 - f), -r * (.9 + f * 1.2)], [r * .5 * (1 - f), -r * (.9 + f * 1.2)]], {w: 3}); sh(c, circ(0, -r * 2.16, r * .14, 12), T.gold, {w: 3.4}); },
   tiara: (c, r) => { for (const [dx, h] of [[-.45, 1.3], [0, 1.7], [.45, 1.3]]) sh(c, [[r * dx - r * .2, -r * .8, 1], [r * dx, -r * h, 1], [r * dx + r * .2, -r * .8, 1]], T.gold, {w: 3.6}); sh(c, [[-r * .7, -r * .62, 1], [r * .7, -r * .62, 1], [r * .64, -r * .86, 1], [-r * .64, -r * .86, 1]], T.gold, {w: 3.6}); },
@@ -90,35 +96,118 @@ const HATS = {
   helmet: (c, r) => { sh(c, [[-r * 1.02, -r * .1, 1], [-r * .9, -r * .7], [0, -r * 1.1], [r * .9, -r * .7], [r * 1.02, -r * .1, 1]], T.greyDk, {w: 4}); sh(c, [[-r * .12, -r * 1.08, 1], [0, -r * 1.6, 1], [r * .12, -r * 1.08, 1]], T.red, {w: 3.4}); },
 };
 const PPK = 1.3;
+
 function pp(c, x, y, s, o = {}) {
-  const {body = T.red, skin = T.skin, hat = 'hair', mood = 'happy', arms = 'down', walk = null, t = 0, dir = 1, mouth = 0, robe = false, skirt = false, prop = null, look = 0, blink = false} = o;
-  c.save(); c.translate(x, y); c.scale(s * dir * PPK, s * PPK);
+  const {
+    body = T.red, skin = T.skin, hat = 'hair', mood = 'happy', arms = 'down', walk = null, t = 0, dir = 1, mouth = 0, robe = false, skirt = false, prop = null, look = 0, blink = false,
+    yaw = 0, torsoYaw = 0, headYaw = 0, headPitch = 0, lean = 0, twist = 0,
+    armSwingL = 0, armSwingR = 0, elbowL = 0, elbowR = 0,
+    legSwingL = 0, legSwingR = 0, kneeL = 0, kneeR = 0,
+    hipSway = 0, shoulderSway = 0, bobY = 0, breathe = 0, clothSway = 0
+  } = o;
+
+  c.save();
+  c.translate(x, y + bobY);
+  c.scale(s * dir * PPK, s * PPK);
+  c.rotate(lean);
+
+  // Shadow
+  c.fillStyle = 'rgba(40,20,10,.16)';
+  c.beginPath();
+  c.ellipse(hipSway, 2, 34, 7, 0, 0, TAU);
+  c.fill();
+
   const bob = walk === null ? Math.sin(t * 2 + x * .01) * 1.4 : -Math.abs(Math.sin(walk * Math.PI * 2)) * 4;
-  c.fillStyle = 'rgba(40,20,10,.16)'; c.beginPath(); c.ellipse(0, 2, 34, 7, 0, 0, TAU); c.fill();
-  for (const [sg, k] of [[-1, 0], [1, 1]]) { const ph = walk === null ? 0 : Math.sin(walk * TAU + k * Math.PI), dx = ph * 8, lift = walk === null ? 0 : Math.max(0, ph) * 6; if (!robe) sh(c, rr(sg * 11 - 7 + dx, -36 - lift, 14, 36, 4), skin, {w: 4}); else sh(c, ell(sg * 11 + dx + 3, -4 - lift, 10, 5, 12), skin, {w: 3.4}); }
-  c.translate(0, bob);
-  const sho = {l: [-24, -86], r: [24, -86]};
+
+  // Legs setup (Real proportions: thigh 40, shin 38, foot 12)
+  const sho = {l: [-24 + shoulderSway, -86], r: [24 + shoulderSway, -86]};
+  const hipL = [-16 + hipSway, -36];
+  const hipR = [16 + hipSway, -36];
+
+  // Draw order: far arm -> far leg -> torso -> near leg -> near arm -> head
+  const legL = (() => {
+    const ph = walk === null ? 0 : Math.sin(walk * TAU), lift = walk === null ? 0 : Math.max(0, ph) * 6;
+    const target = [hipL[0] + (legSwingL || ph * 12), -4 - lift];
+    if (!robe) {
+      return () => {
+        for (const [sg, k] of [[-1, 0]]) {
+          const dx = ph * 8;
+          sh(c, rr(sg * 11 - 7 + dx + hipSway, -36 - lift, 14, 36, 4), skin, {w: 4});
+        }
+      };
+    }
+    return () => {};
+  })();
+
+  const legR = (() => {
+    const ph = walk === null ? 0 : Math.sin(walk * TAU + Math.PI), lift = walk === null ? 0 : Math.max(0, ph) * 6;
+    return () => {
+      for (const [sg, k] of [[1, 1]]) {
+        const dx = ph * 8;
+        if (!robe) sh(c, rr(sg * 11 - 7 + dx + hipSway, -36 - lift, 14, 36, 4), skin, {w: 4});
+        else sh(c, ell(sg * 11 + dx + 3 + hipSway, -4 - lift, 10, 5, 12), skin, {w: 3.4});
+      }
+    };
+  })();
+
   const H = {down: {l: [-32, -50], r: [32, -50]}, up: {l: [-44, -128], r: [44, -128]}, pray: {l: [-4, -86], r: [4, -86]}, point: {l: [-32, -50], r: [62, -104]}, hold: {l: [-32, -50], r: [36, -84]}, row: {l: [40, -62], r: [44, -58]}, cheer: {l: [-40, -118 + Math.sin(t * 8) * 8], r: [40, -118 + Math.cos(t * 8) * 8]}}[arms] || {};
-  const limb = (k, back) => { if (!H[k]) return null; const L = twoBone(sho[k], H[k], 22, 22, k === 'l' ? -1 : 1); sh(c, strip([L.root, L.joint, L.end], profile([[0, 13], [1, 11]])), robe ? body : skin, {w: 3.8}); sh(c, circ(L.end[0], L.end[1], 7, 12), skin, {w: 3.4}); pin(c, add(L.root, [0, 2]), 3.4); return L.end; };
+  
+  const limb = (k, back) => {
+    if (!H[k]) return null;
+    const L = twoBone(sho[k], H[k], 22, 22, k === 'l' ? -1 : 1);
+    sh(c, strip([L.root, L.joint, L.end], profile([[0, 13 + (back ? -1 : 1)], [1, 11 + (back ? -1 : 1)]])), robe ? body : skin, {w: back ? 3.4 : 4.2});
+    sh(c, circ(L.end[0], L.end[1], back ? 6 : 7, 12), skin, {w: 3.4});
+    pin(c, add(L.root, [0, 2]), 3.4);
+    return L.end;
+  };
+
+  // 1. Far Arm (Left)
   if (prop && prop.behind) prop.draw(c);
-  const hl = limb('l');
-  // Body: a boxy tunic (robe or skirt reach lower), cloth band at the waist.
-  if (robe) sh(c, [[-26, -94, 1], [26, -94, 1], [32, -2, 1], [-32, -2, 1]], body, {w: LINE});
-  else if (skirt) { sh(c, [[-24, -94, 1], [24, -94, 1], [26, -54, 1], [-26, -54, 1]], skin, {w: LINE}); sh(c, [[-26, -58, 1], [26, -58, 1], [28, -8, 1], [-28, -8, 1]], body, {w: LINE}); mk(c, [[-26, -58], [26, -58]], {w: 7, color: T.gold}); }
-  else { sh(c, [[-24, -94, 1], [24, -94, 1], [26, -54, 1], [-26, -54, 1]], skin, {w: LINE}); sh(c, [[-27, -60, 1], [27, -60, 1], [29, -30, 1], [0, -26], [-29, -30, 1]], body, {w: LINE}); }
+  const hl = limb('l', true);
+
+  // 2. Far Leg
+  legL();
+
+  c.translate(0, bob);
+
+  // 3. Torso (trapezoid narrowing with torsoYaw)
+  const tw = 1 - Math.abs(torsoYaw) * 0.3;
+  c.save();
+  c.rotate(torsoYaw * 0.3 + twist);
+  if (robe) {
+    sh(c, [[-26 * tw, -94, 1], [26 * tw, -94, 1], [32 * tw, -2, 1], [-32 * tw, -2, 1]], body, {w: LINE});
+  } else if (skirt) {
+    sh(c, [[-24 * tw, -94, 1], [24 * tw, -94, 1], [26 * tw, -54, 1], [-26 * tw, -54, 1]], skin, {w: LINE});
+    sh(c, [[-26 * tw, -58, 1], [26 * tw, -58, 1], [28 * tw, -8, 1], [-28 * tw, -8, 1]], body, {w: LINE});
+    mk(c, [[-26 * tw, -58], [26 * tw, -58]], {w: 7, color: T.gold});
+  } else {
+    sh(c, [[-24 * tw, -94, 1], [24 * tw, -94, 1], [26 * tw, -54, 1], [-26 * tw, -54, 1]], skin, {w: LINE});
+    sh(c, [[-27 * tw, -60, 1], [27 * tw, -60, 1], [29 * tw, -30, 1], [0, -26], [-29 * tw, -30, 1]], body, {w: LINE});
+  }
   if (robe) mk(c, [[-18, -92], [22, -40]], {w: 3, al: .7});
-  if (hat === 'mokot' || hat === 'tiara') sh(c, [[-22, -94, 1], [22, -94, 1], [14, -80], [0, -76], [-14, -80]], T.gold, {w: 3.6});
+  if (hat === 'mokot' || hat === 'tiara') sh(c, [[-22 * tw, -94, 1], [22 * tw, -94, 1], [14, -80], [0, -76], [-14, -80]], T.gold, {w: 3.6});
   if (!robe) for (const sg of [-1, 1]) pin(c, [sg * 11, -40], 3);
-  // Head.
-  c.save(); c.translate(0, -124);
+  c.restore();
+
+  // 4. Near Leg
+  legR();
+
+  // 5. Near Arm (Right)
+  const hr = limb('r', false);
+  if (prop && !prop.behind) prop.draw(c, hr, hl);
+
+  // 6. Head
+  c.save();
+  c.translate(0, -124 + headPitch * 4);
+  c.rotate(headYaw * 0.4);
   sh(c, circ(0, 0, 30, 24), skin, {w: LINE});
   (HATS[hat] || HATS.hair)(c, 30);
-  face(c, 30, {mood, mouth, look, blink});
+  face(c, 30, {mood, mouth, look, blink, headYaw});
   c.restore();
-  const hr = limb('r');
-  if (prop && !prop.behind) prop.draw(c, hr, hl);
+
   c.restore();
 }
+
 // Props held in a hand (hand given in the figure's local space).
 const PROPS = {
   spear: (c, h) => { if (!h) return; mk(c, [[h[0] - 4, h[1] + 60], [h[0] + 6, h[1] - 90]], {w: 9}); mk(c, [[h[0] - 4, h[1] + 60], [h[0] + 6, h[1] - 90]], {w: 4, color: '#b48554'}); sh(c, [[h[0] + 1, h[1] - 88, 1], [h[0] + 7, h[1] - 118, 1], [h[0] + 13, h[1] - 88, 1]], '#d8d5cc', {w: 3.4}); },
