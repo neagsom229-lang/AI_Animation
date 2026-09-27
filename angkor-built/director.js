@@ -49,6 +49,21 @@ function performNarrator(c, tau, S, sc, prevX, draw) {
 // The push is anchored near the top edge so hanging signs stay in frame.
 const DEFAULT_CAMERA = (tau, S) => { const zoom = lerp(1, 1.05, span(0, S.dur, tau, easeInOutSine)); return {x: W / 2, y: 60 + 480 / zoom, zoom}; };
 function applyCamera(c, v) { resetT(c); c.translate(W / 2, H / 2); c.scale(v.zoom, v.zoom); c.translate(-v.x + (v.dx || 0), -v.y + (v.dy || 0)); }
+function cam3D(c, state) {
+  const {
+    x = 960, y = 540, z = 800,
+    targetX = 0, targetY = 0, targetZ = 0,
+    fov = 60, turn = 0
+  } = state;
+  resetT(c);
+  const [sx, sy, scale] = project([targetX, targetY, targetZ], {
+    cx: W / 2, cy: H / 2, fov: z, scale: 1
+  });
+  c.translate(W / 2, H / 2);
+  c.scale(scale, scale);
+  c.rotate(turn);
+  c.translate(-sx - targetX, -sy - targetY);
+}
 // Dip through dark paper between full-frame scenes (the stage uses its curtain).
 function dipCut(c, tau, dur, a = .5) { const k = Math.max(1 - clamp(tau / a, 0, 1), clamp((tau - dur + a) / a, 0, 1)); if (k <= 0) return; resetT(c); c.save(); c.globalAlpha = easeInOutSine(k); c.fillStyle = '#17110c'; c.fillRect(0, 0, W, H); c.restore(); }
 

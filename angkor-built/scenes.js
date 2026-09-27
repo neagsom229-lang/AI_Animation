@@ -35,11 +35,9 @@ const SCENES = [
   }},
   {...timing30('commission'), name: 'commission', mood: 'gold', camera: tau => ({x: 960, y: 540, zoom: lerp(1.02, 1.1, span(0, 30, tau))}), set(c, tau) {
     sunBurst(c, 330, 198, 60, tau);
-    // A five-peaked, stepped Mount Meru rises as the royal commission takes shape, enhanced with 3D projection & rotation.
     const rise = span(.5, 8, tau, easeOut);
     sh(c, [[170, 744, 1], [210, 590], [300, 480], [380, 568], [470, 390], [560, 520], [650, 320], [740, 512], [825, 408], [920, 566], [1010, 480], [1110, 744, 1]], '#c69b66', {w: 4, al: rise});
     
-    // Demonstrate 3D rotation, projection, and z-buffered drawing (using rotY, fastCos, project, zDraw, flushZ)
     const angle3D = tau * 0.5;
     const towers3D = [
       {x: -120, y: -100, z: 50, h: 180},
@@ -59,22 +57,37 @@ const SCENES = [
 
     handText(c, 'MOUNT MERU (3D ROTATION)', 600, 275, 34, span(1.8, 2.8, tau), {col: '#76523a'});
     angkorFlat(c, 1510, 758, .35);
-    const x = tau < 4 ? lerp(1510, 1350, span(0, 4, tau)) : tau < 18 ? lerp(1350, 760, span(4, 18, tau, easeInOutSine)) : lerp(760, 690, span(18, 22, tau));
+
+    const m = tau < 4 ? walk3D(tau, 0, 4, [1510, 920], [1350, 920]) : tau < 18 ? walk3D(tau, 4, 18, [1350, 920], [760, 920]) : walk3D(tau, 18, 22, [760, 920], [690, 920]);
     const walking = tau > 2 && tau < 22;
-    pp(c, x, 920, 1.12, {body: T.red, hat: 'mokot', dir: -1, arms: walking ? 'down' : 'up', walk: walking ? tau * 1.2 : null, mood: tau > 22 ? 'star' : 'happy', t: tau});
-    for (let k = 0; k < 3; k++) pp(c, 1130 + k * 105, 920, .76, {body: [T.teal, T.orange, T.navy][k], hat: 'hair', arms: tau > 10 ? 'cheer' : 'pray', mood: 'happy', t: tau + k});
-    emote(c, tau, 3.2, x, 610, 'idea', {t1: 5.3});
+    pp(c, m.x, m.y + m.bobY * 3, 1.12, {
+      body: T.red, hat: 'mokot', dir: -1, arms: walking ? 'down' : 'up',
+      walk: walking ? tau * 0.72 : null, mood: tau > 22 ? 'star' : 'happy', t: tau,
+      walk: walking ? m.walk : null,
+      armSwingL: m.armSwingL, armSwingR: m.armSwingR,
+      elbowL: m.elbowL, elbowR: m.elbowR,
+      legSwingL: m.legSwingL, legSwingR: m.legSwingR,
+      kneeL: m.kneeL, kneeR: m.kneeR,
+      hipSway: m.hipSway, shoulderSway: m.shoulderSway,
+      torsoYaw: m.torsoYaw, headYaw: m.headYaw, headPitch: m.headPitch,
+      bobY: m.bobY, breathe: m.breathe, clothSway: m.clothSway
+    });
+    for (let k = 0; k < 3; k++) {
+      const i = idle3D(tau + k * 0.15);
+      pp(c, 1130 + k * 105, 920, .76, {body: [T.teal, T.orange, T.navy][k], hat: 'hair', arms: tau > 10 ? 'cheer' : 'pray', mood: 'happy', t: tau + k, ...i});
+    }
+    emote(c, tau, 3.2, m.x, 610, 'idea', {t1: 5.3});
   }},
   {...timing30('quarry'), name: 'quarry', mood: 'dust', camera: fixed(960, 540, 1.05), set(c, tau) {
     mountainT(c, 390, 800, .95, tau, {fall: false});
-    // Exposed sandstone face and cut blocks make the quarry legible at a glance.
     sh(c, [[210, 748, 1], [265, 640], [475, 610], [540, 748, 1]], '#bd9364', {w: 4});
     for (let k = 0; k < 6; k++) blockT(c, 268 + k * 68, 754, 55, 44);
     blockT(c, 760, 752, 172, 112);
     for (let k = 0; k < 3; k++) {
       const x = 610 + k * 260, working = Math.sin(tau * .8 + k) > -.72;
       const hammer = working ? Math.sin(tau * 8 + k) * 18 : 0;
-      pp(c, x, 916, .86, {body: [T.teal, T.orange, T.red][k], hat: 'hair', arms: working ? 'hold' : 'down', walk: working ? tau * 1.2 + k : null, t: tau + k});
+      const i = idle3D(tau + k * 0.15);
+      pp(c, x, 916, .86, {body: [T.teal, T.orange, T.red][k], hat: 'hair', arms: working ? 'hold' : 'down', walk: working ? tau * 1.2 + k + k * 0.15 : null, t: tau + k, ...i});
       mk(c, [[x + 24, 804], [x + 62, 770 + hammer]], {w: 8, color: '#765036'});
       if (working) sparkle(c, x + 64, 769 + hammer, .42, .35 + .35 * Math.sin(tau * 12 + k) ** 2);
     }
@@ -99,7 +112,10 @@ const SCENES = [
       blockT(c, ex - 315, 918, 150, 78);
       sh(c, rr(ex - 338, 918, 176, 16, 5), '#946342', {w: 4});
       mk(c, [[ex - 162, 894], [ex - 96, 835], [ex - 44, 842]], {w: 4, color: '#805b3e'});
-      elephantT(c, ex, 948, .62, tau * .75 + k, {walk: true, rider: g => pp(g, 0, -6, .65, {body: T.orange, hat: 'hair', arms: 'hold', t: tau})});
+      elephantT(c, ex, 948, .62, tau * .75 + k, {walk: true, rider: g => {
+        const i = idle3D(tau);
+        pp(g, 0, -6, .65, {body: T.orange, hat: 'hair', arms: 'hold', t: tau, ...i});
+      }});
     }
     for (let k = 0; k < 8; k++) { const x = (k * 231 + tau * (18 + k % 3 * 5)) % 1940; mk(c, [[x, 735 + (k % 3) * 35], [x + 24 + 12 * Math.sin(tau * 2 + k), 739 + (k % 3) * 35]], {w: 3, color: '#f6e6b4', al: .62}); }
   }},
@@ -113,7 +129,6 @@ const SCENES = [
       mk(c, [[x + 50, 754], [x + 50, lerp(754, scaffoldTop, rise)]], {w: 5, color: '#9c7046', al: .85});
       for (let row = 1; row <= 6; row++) { const p = span(row * 2 + k * .3, row * 2 + 1.1 + k * .3, tau); if (p > 0 && lerp(754, scaffoldTop, rise) < 754 - row * 62) mk(c, [[x, 754 - row * 62], [x + 50, 754 - row * 62]], {w: 4, color: '#a87b4e', al: p * .85}); }
     }
-    // Carved narrative panels on the gallery wall; chisels and workers move along it.
     sh(c, rr(280, 628, 510, 114, 10), '#c5a574', {w: 4});
     for (let k = 0; k < 12; k++) {
       const x = 310 + k * 39, y = 720 - (k % 3) * 18;
@@ -122,11 +137,23 @@ const SCENES = [
     }
     for (let k = 0; k < 4; k++) {
       const x = 340 + ((tau * 28 + k * 390) % 1240), working = Math.sin(tau * .7 + k) > -.8;
-      pp(c, x, 950, .78, {body: [T.teal, T.red, T.orange][k % 3], hat: 'hair', arms: working ? 'hold' : 'down', walk: working ? tau * 1.4 : null, t: tau + k});
+      const m = walk3D(tau, 0, 30, [x, 950], [x + 10, 950], {stride: 80});
+      const i = idle3D(tau + k * 0.15);
+      pp(c, m.x, m.y + m.bobY * 3, .78, {
+        body: [T.teal, T.red, T.orange][k % 3], hat: 'hair', arms: working ? 'hold' : 'down',
+        walk: working ? m.walk + k * 0.15 : null, t: tau + k,
+        ...i,
+        armSwingL: m.armSwingL, armSwingR: m.armSwingR,
+        elbowL: m.elbowL, elbowR: m.elbowR,
+        legSwingL: m.legSwingL, legSwingR: m.legSwingR,
+        kneeL: m.kneeL, kneeR: m.kneeR,
+        hipSway: m.hipSway, shoulderSway: m.shoulderSway,
+        torsoYaw: m.torsoYaw, headYaw: m.headYaw, headPitch: m.headPitch,
+        bobY: m.bobY, breathe: m.breathe, clothSway: m.clothSway
+      });
       mk(c, [[x + 25, 836], [x + 74, 790 + (working ? Math.sin(tau * 8 + k) * 13 : 0)]], {w: 7, color: '#765036'});
       if (working) sparkle(c, x + 76, 788, .38, .55);
     }
-    // The excavated moat grows around the completed temple in the foreground.
     const moat = span(12, 26, tau);
     if (moat > 0) { c.save(); c.globalAlpha = moat * .7; sh(c, ell(1110, 1025, 530, 62, 30), '#5e9ca7', {w: 4}); c.restore(); }
   }},
@@ -142,8 +169,21 @@ const SCENES = [
     angkorFlat(c, 960, y, .72);
     for (let k = 0; k < 20; k++) { const x = 190 + k * 80; mk(c, [[x, 770 + (k % 2) * 13], [x + 38 + Math.sin(tau * 1.3 + k) * 12, 772 + (k % 2) * 13]], {w: 3, color: '#f4d294', al: .48}); }
     for (let k = 0; k < 7; k++) {
-      const x = 260 + k * 235 + Math.sin(tau * .16 + k) * 38;
-      pp(c, x, 948, .64, {body: '#343442', skin: '#343442', hat: 'hair', arms: k % 3 === 0 ? 'up' : 'down', walk: tau * .55 + k, t: tau + k});
+      const startX = 260 + k * 235;
+      const m = walk3D(tau, 0, 30, [startX, 948], [startX + 50, 948], {stride: 80});
+      pp(c, m.x, m.y + m.bobY * 3, .64, {
+        body: '#343442', skin: '#343442', hat: 'hair',
+        arms: k % 3 === 0 ? 'up' : 'down',
+        walk: m.walk + k * 0.15,
+        t: tau + k,
+        armSwingL: m.armSwingL, armSwingR: m.armSwingR,
+        elbowL: m.elbowL, elbowR: m.elbowR,
+        legSwingL: m.legSwingL, legSwingR: m.legSwingR,
+        kneeL: m.kneeL, kneeR: m.kneeR,
+        hipSway: m.hipSway, shoulderSway: m.shoulderSway,
+        torsoYaw: m.torsoYaw, headYaw: m.headYaw, headPitch: m.headPitch,
+        bobY: m.bobY, breathe: m.breathe, clothSway: m.clothSway
+      });
     }
     flagT(c, 1450, 850, 160, tau, span(.8, 3, tau));
   }},
