@@ -122,13 +122,24 @@ function pp(c, x, y, s, o = {}) {
     l: [-24 - torsoYaw * 6, -86],
     r: [24 - torsoYaw * 6, -86]
   };
-  const H = {down: {l: [-32, -50], r: [32, -50]}, up: {l: [-44, -128], r: [44, -128]}, pray: {l: [-4, -86], r: [4, -86]}, point: {l: [-32, -50], r: [62, -104]}, hold: {l: [-32, -50], r: [36, -84]}, row: {l: [40, -62], r: [44, -58]}, cheer: {l: [-40, -118 + Math.sin(t * 8) * 8], r: [40, -118 + Math.cos(t * 8) * 8]}}[arms] || {};
+  const H = {down: {l: [-32, -50], r: [32, -50]}, up: {l: [-30, -135], r: [30, -135]}, pray: {l: [-4, -86], r: [4, -86]}, point: {l: [-32, -50], r: [62, -104]}, hold: {l: [-32, -50], r: [36, -84]}, row: {l: [40, -62], r: [44, -58]}, cheer: {l: [-40, -118 + Math.sin(t * 8) * 8], r: [40, -118 + Math.cos(t * 8) * 8]}}[arms] || {};
   const limb = (k, back) => {
     if (!H[k]) return null;
     const swing = k === 'l' ? armSwingL : armSwingR;
-    const Hx = H[k][0] + swing * 12;
-    const Hy = H[k][1] + Math.abs(swing) * 4;
-    const L = twoBone(sho[k], [Hx, Hy], 22, 22, k === 'l' ? -1 : 1);
+    const swingScale = (arms === 'walk' || walk !== null) ? 12 : 4;
+    const Hx = H[k][0] + swing * swingScale;
+    const Hy = H[k][1] + Math.abs(swing) * 2;
+    const dx = Hx - sho[k][0];
+    const dy = Hy - sho[k][1];
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxReach = 42;  // 22 + 22 minus a little slack
+    let tx = Hx, ty = Hy;
+    if (dist > maxReach) {
+      const scale = maxReach / dist;
+      tx = sho[k][0] + dx * scale;
+      ty = sho[k][1] + dy * scale;
+    }
+    const L = twoBone(sho[k], [tx, ty], 22, 22, k === 'l' ? -1 : 1);
     // Foreshortening: scale arm thickness by depth
     const depth = 1 + swing * 0.15;
     sh(c, strip([L.root, L.joint, L.end], profile([[0, 13 * depth], [1, 11 * depth]])), robe ? body : skin, {w: 3.8});
@@ -171,6 +182,7 @@ function pp(c, x, y, s, o = {}) {
   const hr = limb('r');
   if (prop && !prop.behind) prop.draw(c, hr, hl);
   c.restore();
+  return hr || hl || [0, 0];
 }
 // Props held in a hand (hand given in the figure's local space).
 const PROPS = {

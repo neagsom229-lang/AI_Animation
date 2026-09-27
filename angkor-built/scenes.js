@@ -105,7 +105,7 @@ const SCENES = [
       const hammer = working ? Math.sin(tau * 8 + k) * 18 : 0;
       const swing = working ? Math.sin(tau * 6 + k) * 0.7 : 0;
       const depth = 0.85 + (y - 700) / 1000 * 0.3;
-      pp(c, x, y, .86 * depth, {
+      const hand = pp(c, x, y, .86 * depth, {
         body: [T.teal, T.orange, T.red][k], hat: 'hair',
         arms: working ? 'hold' : 'down',
         walk: working ? tau * 1.2 + k : null,
@@ -121,7 +121,9 @@ const SCENES = [
         hipSway: swing * 0.3,
         t: tau + k
       });
-      mk(c, [[x + 24, 804], [x + 62, 770 + hammer]], {w: 8, color: '#765036'});
+      const handX = hand ? hand[0] + x : x + 24;
+      const handY = hand ? hand[1] + y : 804;
+      mk(c, [[handX, handY], [handX + 38, handY - 34 + hammer]], {w: 8, color: '#765036'});
       if (working) sparkle(c, x + 64, 769 + hammer, .42, .35 + .35 * Math.sin(tau * 12 + k) ** 2);
     }
     for (let k = 0; k < 12; k++) { const p = pop(tau, 2.2 + k * 1.65, .45); if (p > 0) blockT(c, 940 + (k % 3) * 82, 902 - Math.floor(k / 3) * 47, 76, 48); }
@@ -195,7 +197,7 @@ const SCENES = [
       const x = 340 + ((tau * 28 + k * 390) % 1240), y = 950, working = Math.sin(tau * .7 + k) > -.8;
       const carve = working ? Math.sin(tau * 5 + k) * 0.6 : 0;
       const depth = 0.85 + (y - 700) / 1000 * 0.3;
-      pp(c, x, y, .78 * depth, {
+      const hand = pp(c, x, y, .78 * depth, {
         body: [T.teal, T.red, T.orange][k % 3], hat: 'hair',
         arms: working ? 'hold' : 'down',
         walk: working ? tau * 1.4 + k * 0.15 : null,
@@ -209,7 +211,9 @@ const SCENES = [
         breathe: 0.4,
         t: tau + k
       });
-      mk(c, [[x + 25, 836], [x + 74, 790 + (working ? Math.sin(tau * 8 + k) * 13 : 0)]], {w: 7, color: '#765036'});
+      const handX = hand ? hand[0] + x : x + 25;
+      const handY = hand ? hand[1] + y : 836;
+      mk(c, [[handX, handY], [handX + 49, handY - 46 + (working ? Math.sin(tau * 8 + k) * 13 : 0)]], {w: 7, color: '#765036'});
       if (working) sparkle(c, x + 76, 788, .38, .55);
     }
     const moat = span(12, 26, tau);
