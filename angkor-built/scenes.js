@@ -35,11 +35,29 @@ const SCENES = [
   }},
   {...timing30('commission'), name: 'commission', mood: 'gold', camera: tau => ({x: 960, y: 540, zoom: lerp(1.02, 1.1, span(0, 30, tau))}), set(c, tau) {
     sunBurst(c, 330, 198, 60, tau);
-    // A five-peaked, stepped Mount Meru rises as the royal commission takes shape.
+    // A five-peaked, stepped Mount Meru rises as the royal commission takes shape, enhanced with 3D projection & rotation.
     const rise = span(.5, 8, tau, easeOut);
     sh(c, [[170, 744, 1], [210, 590], [300, 480], [380, 568], [470, 390], [560, 520], [650, 320], [740, 512], [825, 408], [920, 566], [1010, 480], [1110, 744, 1]], '#c69b66', {w: 4, al: rise});
-    for (let k = 0; k < 5; k++) { const x = 278 + k * 166, h = [105, 175, 235, 175, 105][k] * rise; budTower(c, x, 700, 58, h, '#b58251'); }
-    handText(c, 'MOUNT MERU', 600, 275, 34, span(1.8, 2.8, tau), {col: '#76523a'});
+    
+    // Demonstrate 3D rotation, projection, and z-buffered drawing (using rotY, fastCos, project, zDraw, flushZ)
+    const angle3D = tau * 0.5;
+    const towers3D = [
+      {x: -120, y: -100, z: 50, h: 180},
+      {x: 120, y: -100, z: 50, h: 180},
+      {x: 0, y: -130, z: 0, h: 235},
+      {x: -80, y: -70, z: -50, h: 150},
+      {x: 80, y: -70, z: -50, h: 150}
+    ];
+    towers3D.forEach((twr, idx) => {
+      const rot = rotY([twr.x, twr.y, twr.z], angle3D);
+      const proj = project(rot, {cx: 960, cy: 620, fov: 900, scale: rise});
+      zDraw(rot[2], (g) => {
+        budTower(g, proj[0], proj[1] + 80, 52 * proj[2], twr.h * proj[2], idx === 2 ? '#c48e55' : '#b58251');
+      });
+    });
+    flushZ(c);
+
+    handText(c, 'MOUNT MERU (3D ROTATION)', 600, 275, 34, span(1.8, 2.8, tau), {col: '#76523a'});
     angkorFlat(c, 1510, 758, .35);
     const x = tau < 4 ? lerp(1510, 1350, span(0, 4, tau)) : tau < 18 ? lerp(1350, 760, span(4, 18, tau, easeInOutSine)) : lerp(760, 690, span(18, 22, tau));
     const walking = tau > 2 && tau < 22;
