@@ -105,6 +105,7 @@ function pp(c, x, y, s, o = {}) {
   const bob = bobBase - bobY * 3;
   c.fillStyle = 'rgba(40,20,10,.16)'; c.beginPath(); c.ellipse(0, 2, 34, 7, 0, 0, TAU); c.fill();
   const hipX = hipSway * 4;
+  const hipDrop = Math.abs(hipSway) * 3;
   for (const [sg, k] of [[-1, 0], [1, 1]]) {
     const ph = walk === null ? 0 : Math.sin(walk * TAU + k * Math.PI);
     const legSwing = k === 0 ? legSwingL : legSwingR;
@@ -116,7 +117,7 @@ function pp(c, x, y, s, o = {}) {
     else sh(c, ell(sg * 11 + dx + 3, -4 - lift, 10, 5, 12), skin, {w: 3.4});
   }
   // Reset the translate to account for hips
-  c.translate(hipX * 0.5, 0);
+  c.translate(hipX * 0.5, hipDrop);
   c.translate(0, bob);
   const sho = {
     l: [-24 - torsoYaw * 6, -86],
