@@ -1,87 +1,75 @@
-# Kuanimation skill
+# Kuanimation Studio & Agent Skill
 
-Kuanimation is an [Agent Skill](https://agentskills.io/specification) for making illustrated animated stories and explainers. It includes a Canvas drawing runtime with five looks (a 2D pencil sketch by default, plus watercolour, hazy painted forest, paper diorama and felt-tip marker), a film template, an offline renderer and mixer, optional text-to-speech scripts, and two complete examples: Angkor (watercolour, Khmer voice-over) and the life cycle of a sunflower (pencil sketch, captions and music). The skill name is **`kuanimation`**; install the repository in a directory with that name so agents can discover it.
+Kuanimation is an [Agent Skill](https://agentskills.io/specification) and modern Web Studio for making illustrated animated stories and explainers. It features a dual 2D Pencil Sketch and 3D WebGL (Three.js) engine with post-processing (Bloom, Depth of Field), timeline scrubbing, multilingual support (English & Khmer), audio narration, and WebM video recording.
 
-The example includes its voice clips, so you can preview and rebuild it **without an API key**. A Gemini API key is needed only if you choose to generate new speech with Gemini TTS. Microsoft Edge TTS is another option.
+---
 
-## Install the skill
+## Getting Started & Runnable App
 
-These commands install the skill for your user account on macOS or Linux. They require Git. If the destination already exists, update it with `git -C <destination> pull --ff-only` instead of cloning again.
-
-### Codex, Cursor, and Gemini CLI
-
-All three discover user skills in `~/.agents/skills/` ([Codex](https://learn.chatgpt.com/docs/build-skills), [Cursor](https://www.cursor.com/docs/skills), [Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/using-agent-skills.md)). One installation can serve all three:
+To open the interactive Studio in your browser:
 
 ```bash
-mkdir -p ~/.agents/skills
-git clone https://github.com/realsannimith/kuanimation-skill.git ~/.agents/skills/kuanimation
+npm install
+npm run dev
 ```
 
-In Codex, mention `$kuanimation` or use `/skills`. In Cursor, search for `kuanimation` in the Agent skill menu. In Gemini CLI, run `/skills list`; if a session was already open, run `/skills reload`.
-
-### Claude Code
-
-Claude Code discovers personal skills in `~/.claude/skills/` ([Claude Code documentation](https://code.claude.com/docs/en/skills)):
+To run the automated test suite:
 
 ```bash
-mkdir -p ~/.claude/skills
-git clone https://github.com/realsannimith/kuanimation-skill.git ~/.claude/skills/kuanimation
+npm test
 ```
 
-Start Claude Code and use `/kuanimation`, or ask it to make an animated story. If you also use the shared installation above, you can link it instead of cloning twice: `ln -s ~/.agents/skills/kuanimation ~/.claude/skills/kuanimation`.
+---
 
-### Other agents and project installs
+## Architecture Overview
 
-For any agent that supports the [Agent Skills format](https://agentskills.io/specification), place the whole repository in that agent's skills directory as `kuanimation/`. Keep `SKILL.md`, `assets/`, `references/`, and `examples/` together. Check that agent's documentation for its discovery path and how to refresh skills.
+- **`src/core/engine.js`**: Timeline scheduler, easing library (`Easing`), keyframe interpolation, and particle systems.
+- **`src/core/story.js`**: Data-driven story format (`Story`, `Scene`, `Character`), validation, and offline generation fallbacks.
+- **`src/render/canvas2d.js`**: 2D Pencil Sketch renderer featuring layered scenes, parallax background scrolling, procedural character sprites, hatching textures, weather effects, vignette lighting, screen shake, and scene transitions (fade, wipe, dissolve).
+- **`src/render/three3d.js`**: 3D Three.js scene manager with procedural geometry, camera rigs (`dolly`, `orbit`, `crane`, `handheld`), mood lighting presets, and `EffectComposer` post-processing (Unreal Bloom & Depth of Field Bokeh), with quality toggles for low-end devices.
+- **`src/audio/audio.js`**: Web Audio API tone synthesis and speech narration manager.
+- **`src/ui/app.js`**: Modern Studio UI controller hosting story prompt panel, timeline scrubber, theme toggle, JSON import/export, and MediaRecorder.
 
-For a project-only installation, clone this repository to `<your-project>/.agents/skills/kuanimation` for Codex, Cursor, or Gemini CLI, or to `<your-project>/.claude/skills/kuanimation` for Claude Code. If you plan to commit the host project, copy the skill files without the nested `.git` directory or use a Git submodule.
+---
 
-## Requirements for rendering
+## How to Add a Story
 
-- Node.js and npm
-- Google Chrome or Chromium (set `CHROME=/path/to/browser` if it is not in the usual location)
-- FFmpeg and FFprobe
-- Python 3 only for generating new speech
+1. Create a JSON story file in `src/stories/` (or reference a custom JSON object) conforming to the `Story` schema:
+   ```json
+   {
+     "title": "My Story Title",
+     "genre": "historical",
+     "theme": "Story theme description",
+     "tone": "epic",
+     "language": "en",
+     "characters": [
+       { "id": "hero", "name": "Hero Name", "role": "Protagonist" }
+     ],
+     "scenes": [
+       {
+         "id": "scene1",
+         "name": "Opening Scene",
+         "mood": "warm dawn",
+         "dur": 6,
+         "camera": "dolly",
+         "renderer": "2d",
+         "dialogue": [
+           { "speaker": "hero", "text": "Hello world!", "subtitle": "Hello." }
+         ]
+       }
+     ]
+   }
+   ```
+2. Load or import the story JSON in `AnimationStudioApp` (`src/ui/app.js`) or select it via the genre/prompt panel.
 
-The renderer uses `puppeteer-core`, installed with `npm install` in each film project. The included example needs no TTS dependency or key.
+---
 
-## Try the included example
+## Accessibility & Reduced Motion
 
-Run this from the cloned skill directory. It copies the sample into a separate folder so generated files never alter the skill:
+- **Keyboard Accessibility**: All studio controls, buttons, scrubbers, and selects are fully keyboard navigable with standard focus rings and ARIA attributes.
+- **Reduced Motion**: Respects `prefers-reduced-motion: media` queries, automatically minimizing or disabling heavy procedural animations and transitions for users sensitive to motion.
 
-```bash
-DEMO_DIR="$(mktemp -d)"
-cp -R assets/. "$DEMO_DIR/"
-cp -R examples/angkor/. "$DEMO_DIR/"
-cd "$DEMO_DIR"
-npm install --no-audit --no-fund
-node render.mjs film.html --grid 12
-```
+---
 
-Open `out/film-grid.jpg` to inspect the preview. To produce the narrated film, run:
-
-```bash
-node mix.mjs film.html
-node render.mjs film.html
-```
-
-The final film is `out/film-final.mp4`. For the pencil-sketch example, copy `examples/sunflower/` instead of `examples/angkor/`; it needs no voice files at all. The full render takes longer than the preview. See [the example guide](examples/angkor/README.md) and [the skill instructions](SKILL.md) to make your own film.
-
-## Keep credentials out of Git
-
-The Gemini script reads `GEMINI_API_KEY` from your environment; it does not need a key in any project file. Set the variable in your shell or a secret manager, and never paste a real value into `SKILL.md`, narration, examples, commits, or issue reports. This repository ignores common local secret files, virtual environments, dependencies, and render output.
-
-The repository includes a staged-file secret check. Enable the hook in a clone with `git config core.hooksPath .githooks`, then run `python3 scripts/check_secrets.py --all` whenever you want to check the current files. GitHub Actions also scans tracked files on pushes and pull requests. A successful scan reduces risk but cannot guarantee that every possible credential format will be caught. If a real key is ever committed, revoke it and remove it from the repository history before sharing the repository again.
-
-## Update
-
-Run `git -C ~/.agents/skills/kuanimation pull --ff-only` or `git -C ~/.claude/skills/kuanimation pull --ff-only`, according to where you installed it. Restart the agent if it does not show the updated skill.
-
-If you installed the earlier `drawtale` skill, rename its folder before updating. For a standalone shared installation:
-
-```bash
-mv ~/.agents/skills/drawtale ~/.agents/skills/kuanimation
-git -C ~/.agents/skills/kuanimation pull --ff-only
-```
-
-For a standalone Claude Code installation, use the same commands with `~/.claude/skills/`. If Claude Code used a symlink to the shared installation, replace that symlink with `~/.claude/skills/kuanimation` pointing to `~/.agents/skills/kuanimation`.
+## License & Security
+- Keep credentials out of Git. Never commit `.env` or API keys.

@@ -1,0 +1,35 @@
+{
+  "title": "រឿងព្រេងប្រាសាទ និង ទឹកដីខ្មែរ",
+  "genre": "historical",
+  "theme": "ប្រាសាទថ្ម និង ប្រព័ន្ធធារាសាស្ត្របុរាណ",
+  "tone": "inspiring",
+  "language": "km",
+  "characters": [
+    { "id": "reach", "name": "បុត្រា រាជ", "role": "ជាងចម្លាក់" },
+    { "id": "minea", "name": "នាង មីនា", "role": "អ្នកស្រាវជ្រាវ" }
+  ],
+  "scenes": [
+    {
+      "id": "k1",
+      "name": "ព្រឹកព្រលឹមនៅអង្គរ",
+      "mood": "warm dawn",
+      "dur": 6,
+      "camera": "dolly",
+      "renderer": "2d",
+      "dialogue": [
+        { "speaker": "minea", "text": "ពន្លឺថ្ងៃដំបូងជះលើកំពូលប្រាសាទ បង្ហាញពីស្ថាបត្យកម្មដ៏អស្ចារ្យ។", "subtitle": "First light over temple spires." }
+      ]
+    },
+    {
+      "id": "k2",
+      "name": "ប្រព័ន្ធទឹក និង ការសាងសង់",
+      "mood": "gold dust",
+      "dur": 8,
+      "camera": "orbit",
+      "renderer": "3d",
+      "dialogue": [
+        { "speaker": "reach", "text": "ទឹកគឺជីវិតនៃអាណាចក្រ យើងជីកបារាយណ៍ដើម្បីទ្រទ្រង់ដំណាំ។", "subtitle": "Water is life for the empire." }
+      ]
+    }
+  ]
+}

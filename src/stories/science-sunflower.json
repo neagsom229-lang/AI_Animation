@@ -1,0 +1,35 @@
+{
+  "title": "The Journey of the Sunflower",
+  "genre": "science",
+  "theme": "Photosynthesis and heliotropism in botany",
+  "tone": "educational",
+  "language": "en",
+  "characters": [
+    { "id": "flora", "name": "Flora", "role": "Botanist" },
+    { "id": "helios", "name": "Helios", "role": "Sun Ray" }
+  ],
+  "scenes": [
+    {
+      "id": "sf1",
+      "name": "Sprouting Seed",
+      "mood": "paper",
+      "dur": 5,
+      "camera": "crane",
+      "renderer": "2d",
+      "dialogue": [
+        { "speaker": "flora", "text": "From a tiny seed beneath rich soil, green life awakens.", "subtitle": "Green life awakens from the seed." }
+      ]
+    },
+    {
+      "id": "sf2",
+      "name": "Tracking the Sun",
+      "mood": "green",
+      "dur": 7,
+      "camera": "orbit",
+      "renderer": "3d",
+      "dialogue": [
+        { "speaker": "helios", "text": "Every morning the sunflower turns its golden face to follow my light.", "subtitle": "Sunflower turns to follow the sun." }
+      ]
+    }
+  ]
+}

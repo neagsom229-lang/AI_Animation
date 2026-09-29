@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kuanimation Studio - AI Pencil Sketch Animation</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #121212; color: #e0e0e0; }
+    #app { width: 100%; height: 100%; display: flex; flex-direction: column; }
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" role="application" aria-label="Kuanimation Studio"></div>
+  <script type="module">
+    import { AnimationStudioApp } from './src/ui/app.js';
+    window.addEventListener('DOMContentLoaded', () => {
+      const appEl = document.getElementById('app');
+      window.studioApp = new AnimationStudioApp(appEl);
+    });
+  </script>
+</body>
+</html>

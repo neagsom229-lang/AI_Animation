@@ -1,0 +1,35 @@
+{
+  "title": "Echoes of Angkor / ប្រវត្តិអង្គរ",
+  "genre": "historical",
+  "theme": "Rise of water management and great temples",
+  "tone": "epic",
+  "language": "en",
+  "characters": [
+    { "id": "jaya", "name": "King Jayavarman VII", "role": "Builder King" },
+    { "id": "zhou", "name": "Zhou Daguan", "role": "Diplomatic Chronicler" }
+  ],
+  "scenes": [
+    {
+      "id": "s1",
+      "name": "Forest Dawn",
+      "mood": "warm dawn",
+      "dur": 6,
+      "camera": "dolly",
+      "renderer": "2d",
+      "dialogue": [
+        { "speaker": "zhou", "text": "In the heart of the great forest, stone temples rise to touch the clouds.", "subtitle": "Stone temples rise in the forest." }
+      ]
+    },
+    {
+      "id": "s2",
+      "name": "Reservoir Construction",
+      "mood": "gold dust",
+      "dur": 8,
+      "camera": "orbit",
+      "renderer": "3d",
+      "dialogue": [
+        { "speaker": "jaya", "text": "We carve the baray so living waters sustain our people through every season.", "subtitle": "Carving the baray for living waters." }
+      ]
+    }
+  ]
+}

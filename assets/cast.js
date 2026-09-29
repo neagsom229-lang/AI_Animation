@@ -1,4 +1,4 @@
-'use strict';
+  'use strict';
 // The cast: `face` (expressions), `grandpa` (the built-in narrator design), `pp`
 // (a boxy cut-out player with hats, arms, props), `elephantT`, `apsaraT`.
 // Design a new narrator by copying `grandpa`: it must accept {mouth, blink, look,
