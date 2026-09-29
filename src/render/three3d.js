@@ -10,6 +10,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export const MoodLightingPresets = {
   'warm dawn': { ambient: 0xffe8d6, directional: 0xffb347, fog: 0xffe8d6, intensity: 1.2 },
@@ -64,6 +65,8 @@ export class ThreeSceneManager {
     this.scene.add(this.dirLight);
 
     this.proceduralObjects = [];
+    this.loadedCharacters = [];
+    this.clock = new THREE.Clock();
 
     // Post-processing setup
     this.composer = null;
@@ -94,7 +97,7 @@ export class ThreeSceneManager {
 
   setQuality(quality) {
     this.quality = quality;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality === 'high' ? 2 : 1));
+    this.renderer.setPixelRatio(Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1), quality === 'high' ? 2 : 1));
     this.renderer.shadowMap.enabled = quality === 'high';
     this.dirLight.castShadow = quality === 'high';
 
@@ -169,6 +172,104 @@ export class ThreeSceneManager {
     return group;
   }
 
+  loadCharacter(url, { position = { x: 0, y: 0, z: 0 }, scale = 1 } = {}) {
+    return new Promise((resolve, reject) => {
+      const loader = new GLTFLoader();
+      loader.load(url, (gltf) => {
+        const model = gltf.scene;
+        model.position.set(position.x, position.y, position.z);
+        model.scale.set(scale, scale, scale);
+
+        // Ground offset adjustment: align lowest point (feet) to y = 0
+        const box = new THREE.Box3().setFromObject(model);
+        const minY = box.min.y;
+        model.position.y += (0 - minY);
+
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        this.scene.add(model);
+
+        let mixer = null;
+        let actions = {};
+        let activeAction = null;
+
+        if (gltf.animations && gltf.animations.length > 0) {
+          const clipNames = gltf.animations.map(c => c.name);
+          console.log(`[ThreeSceneManager] Loaded AnimationClips for ${url}:`, clipNames);
+
+          mixer = new THREE.AnimationMixer(model);
+          gltf.animations.forEach((clip) => {
+            const action = mixer.clipAction(clip);
+            actions[clip.name.toLowerCase()] = action;
+          });
+
+          const defaultKey = Object.keys(actions)[0];
+          if (defaultKey) {
+            activeAction = actions[defaultKey];
+            activeAction.play();
+          }
+        } else {
+          console.log(`[ThreeSceneManager] No animations found in GLTF model: ${url}`);
+        }
+
+        let chestBone = null;
+        let headBone = null;
+        let jawBone = null;
+
+        model.traverse((node) => {
+          if (node.isBone || node.isObject3D) {
+            const name = node.name.toLowerCase();
+            if ((name.includes('chest') || name.includes('spine')) && !chestBone) {
+              chestBone = node;
+            }
+            if (name.includes('head')) {
+              headBone = node;
+            }
+            if (name.includes('jaw')) {
+              jawBone = node;
+            }
+          }
+        });
+
+        const charData = {
+          model,
+          mixer,
+          actions,
+          activeAction,
+          chestBone,
+          headBone,
+          jawBone,
+          initialHeadRotation: headBone ? headBone.rotation.clone() : null,
+          initialJawRotation: jawBone ? jawBone.rotation.clone() : null
+        };
+
+        this.loadedCharacters.push(charData);
+        resolve(charData);
+      }, undefined, (error) => {
+        reject(error);
+      });
+    });
+  }
+
+  playCharacterAction(charData, actionName, duration = 0.5) {
+    if (!charData || !charData.actions || !charData.mixer) return;
+    const targetAction = charData.actions[actionName.toLowerCase()];
+    if (!targetAction) return;
+
+    if (charData.activeAction !== targetAction) {
+      targetAction.reset();
+      targetAction.play(); // Play incoming action before fading to avoid visual pops
+      if (charData.activeAction) {
+        charData.activeAction.crossFadeTo(targetAction, duration, true);
+      }
+      charData.activeAction = targetAction;
+    }
+  }
+
   addProceduralProp(id, type = 'temple', { x = 0, y = 0, z = 0 } = {}) {
     let geo, mat = new THREE.MeshStandardMaterial({ color: 0xd4a373, roughness: 0.8 });
     if (type === 'pillar') {
@@ -185,7 +286,42 @@ export class ThreeSceneManager {
     return mesh;
   }
 
-  render() {
+  update(deltaTime = 0.016, audioAmplitude = 0) {
+    const time = this.clock.getElapsedTime();
+
+    for (const char of this.loadedCharacters) {
+      if (char.mixer) {
+        char.mixer.update(deltaTime);
+      }
+
+      // Secondary breathing motion
+      if (char.chestBone) {
+        const breath = Math.sin(time * 3) * 0.02;
+        char.chestBone.scale.set(1 + breath, 1 + breath, 1 + breath);
+      }
+
+      // Head micro-movement
+      if (char.headBone && char.initialHeadRotation) {
+        const sway = Math.sin(time * 1.5) * 0.015;
+        char.headBone.rotation.y = char.initialHeadRotation.y + sway;
+      }
+
+      // Audio RMS-driven viseme / jaw movement with smoothing
+      if (char.jawBone && char.initialJawRotation) {
+        const threshold = 0.02;
+        const effectiveVolume = audioAmplitude > threshold ? (audioAmplitude - threshold) / (1 - threshold) : 0;
+        const targetJawOpen = effectiveVolume * 0.45;
+        char.jawBone.rotation.x = THREE.MathUtils.lerp(
+          char.jawBone.rotation.x,
+          char.initialJawRotation.x + targetJawOpen,
+          0.3
+        );
+      }
+    }
+  }
+
+  render(deltaTime = 0.016, audioAmplitude = 0) {
+    this.update(deltaTime, audioAmplitude);
     if (this.composer && this.quality === 'high') {
       this.composer.render();
     } else {
@@ -212,6 +348,31 @@ export class ThreeSceneManager {
       }
     }
     this.proceduralObjects = [];
+
+    for (const char of this.loadedCharacters) {
+      this.scene.remove(char.model);
+      if (char.mixer) {
+        char.mixer.stopAllAction();
+      }
+      char.model.traverse((child) => {
+        if (child.isMesh) {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((mat) => {
+              for (const key of Object.keys(mat)) {
+                if (mat[key] && typeof mat[key].dispose === 'function') {
+                  mat[key].dispose();
+                }
+              }
+              mat.dispose();
+            });
+          }
+        }
+      });
+    }
+    this.loadedCharacters = [];
+
     if (this.composer) {
       this.composer.dispose();
     }

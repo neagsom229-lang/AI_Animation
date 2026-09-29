@@ -1,0 +1,59 @@
+{
+  "title": "The Explorer's Journey",
+  "genre": "adventure",
+  "theme": "A hero travels through ancient lands, meeting guides and speaking of prophecies.",
+  "tone": "cinematic",
+  "language": "en",
+  "characters": [
+    {
+      "id": "hero",
+      "name": "Explorer Alex",
+      "role": "Protagonist",
+      "modelUrl": "assets/models/explorer.glb"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "scene1",
+      "name": "Quiet Awakening",
+      "mood": "warm dawn",
+      "dur": 5,
+      "camera": "dolly",
+      "renderer": "3d",
+      "actions": [
+        { "character": "hero", "action": "idle" }
+      ],
+      "dialogue": [
+        { "speaker": "hero", "text": "The morning mist rises over the ruins as I stand ready.", "subtitle": "Standing ready in the morning mist." }
+      ]
+    },
+    {
+      "id": "scene2",
+      "name": "Crossing the Bridge",
+      "mood": "gold dust",
+      "dur": 6,
+      "camera": "orbit",
+      "renderer": "3d",
+      "actions": [
+        { "character": "hero", "action": "walk" }
+      ],
+      "dialogue": [
+        { "speaker": "hero", "text": "I walk forward across the ancient stone path toward the temple.", "subtitle": "Walking across the ancient stone path." }
+      ]
+    },
+    {
+      "id": "scene3",
+      "name": "Delivering the Prophecy",
+      "mood": "paper",
+      "dur": 7,
+      "camera": "crane",
+      "renderer": "3d",
+      "actions": [
+        { "character": "hero", "action": "talk" }
+      ],
+      "dialogue": [
+        { "speaker": "hero", "text": "Behold the secrets inscribed in stone by the ancestors of old!", "subtitle": "Speaking of ancestral secrets." }
+      ]
+    }
+  ]
+}

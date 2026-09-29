@@ -88,7 +88,9 @@ test('ThreeSceneManager initializes and disposes correctly', () => {
   const prop = manager.addProceduralProp('temple1', 'temple', { x: 5, y: 0, z: 0 });
   assert.ok(prop);
 
-  manager.render();
+  manager.update(0.016, 0.5);
+  manager.render(0.016, 0.5);
   manager.dispose();
   assert.strictEqual(manager.proceduralObjects.length, 0);
+  assert.strictEqual(manager.loadedCharacters.length, 0);
 });
