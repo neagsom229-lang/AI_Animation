@@ -1,6 +1,6 @@
 # Kuanimation Studio & Agent Skill
 
-Kuanimation is an [Agent Skill](https://agentskills.io/specification) and modern Web Studio for making illustrated animated stories and explainers. It features a dual 2D Pencil Sketch and 3D WebGL (Three.js) engine with post-processing (Bloom, Depth of Field), timeline scrubbing, multilingual support (English & Khmer), audio narration, and WebM video recording With highly performance.
+Kuanimation is an [Agent Skill](https://agentskills.io/specification) and modern Web Studio for making illustrated animated stories and explainers. It features a dual 2D Pencil Sketch and 3D WebGL (Three.js) engine with post-processing (Bloom, Depth of Field), timeline scrubbing, multilingual support (English & Khmer), audio narration, and WebM video recording With highly performance well movement.
 
 ---
 
