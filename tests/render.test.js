@@ -19,6 +19,7 @@ if (typeof globalThis.document === 'undefined') {
         canvas: {},
         getExtension: () => {},
         getParameter: () => {},
+        fillRect: () => {},
       })
     }),
     createElementNS: (ns, tagName) => globalThis.document.createElement(tagName)
@@ -57,6 +58,7 @@ test('Canvas2DRenderer initializes and renders without error', () => {
       font: '',
       textAlign: '',
       fillText: () => {},
+      drawImage: () => {},
       createRadialGradient: () => ({ addColorStop: () => {} })
     }),
     width: 800,

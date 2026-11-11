@@ -17,7 +17,7 @@ export const Easing = {
 };
 
 /**
- * Evaluates keyframes at time t.
+ * Evaluates keyframes at time t using binary search.
  * @param {number} t - current time
  * @param {Array<[number, number|number[], Function|string]>} frames - [[time, value, ease?], ...]
  * @param {Function} [defaultEase=Easing.easeInOut]
@@ -25,12 +25,28 @@ export const Easing = {
  */
 export function keyframes(t, frames, defaultEase = Easing.easeInOut) {
   const val = f => f[1];
-  if (t <= frames[0][0]) return val(frames[0]);
-  const i = frames.findIndex((f, k) => k > 0 && t < f[0]);
-  if (i < 0) return val(frames[frames.length - 1]);
-  const a = frames[i - 1], b = frames[i];
+  const n = frames ? frames.length : 0;
+  if (n === 0) return 0;
+  if (n === 1 || t <= frames[0][0]) return val(frames[0]);
+  if (t >= frames[n - 1][0]) return val(frames[n - 1]);
+
+  let lo = 0;
+  let hi = n - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (frames[mid][0] <= t) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+
+  const a = frames[lo];
+  const b = frames[hi];
   const e = typeof a[2] === 'function' ? a[2] : (typeof a[2] === 'string' && Easing[a[2]] ? Easing[a[2]] : defaultEase);
-  const u = e(clamp((t - a[0]) / (b[0] - a[0]), 0, 1));
+  const span = b[0] - a[0];
+  const dt = span === 0 ? 0 : (t - a[0]) / span;
+  const u = e(clamp(dt, 0, 1));
   const va = val(a), vb = val(b);
   if (Array.isArray(va)) {
     return va.map((v, k) => v + (vb[k] - v) * u);
@@ -139,32 +155,62 @@ export class TimelineScheduler {
 export class ParticleSystem {
   constructor(maxParticles = 500) {
     this.maxParticles = maxParticles;
-    this.particles = [];
+    this.pool = Array.from({ length: maxParticles }, () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      maxLife: 1,
+      size: 3,
+      color: '#fff'
+    }));
+    this.activeCount = 0;
   }
 
   emit(config) {
-    const { x = 0, y = 0, vx = 0, vy = -1, life = 1, size = 3, color = '#fff' } = config;
-    if (this.particles.length >= this.maxParticles) {
-      this.particles.shift();
+    if (this.activeCount >= this.maxParticles) {
+      return false;
     }
-    this.particles.push({ x, y, vx, vy, life, maxLife: life, size, color });
+    const { x = 0, y = 0, vx = 0, vy = -1, life = 1, size = 3, color = '#fff' } = config;
+    const p = this.pool[this.activeCount++];
+    p.x = x;
+    p.y = y;
+    p.vx = vx;
+    p.vy = vy;
+    p.life = life;
+    p.maxLife = life;
+    p.size = size;
+    p.color = color;
+    return true;
   }
 
   update(dt) {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
+    let i = 0;
+    while (i < this.activeCount) {
+      const p = this.pool[i];
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.life -= dt;
       if (p.life <= 0) {
-        this.particles.splice(i, 1);
+        this.activeCount--;
+        if (i < this.activeCount) {
+          const last = this.pool[this.activeCount];
+          this.pool[this.activeCount] = p;
+          this.pool[i] = last;
+        } else {
+          this.pool[this.activeCount] = p;
+        }
+      } else {
+        i++;
       }
     }
   }
 
   render(ctx) {
     ctx.save();
-    for (const p of this.particles) {
+    for (let i = 0; i < this.activeCount; i++) {
+      const p = this.pool[i];
       ctx.fillStyle = p.color;
       ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
       ctx.beginPath();

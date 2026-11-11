@@ -5,6 +5,10 @@
 
 'use strict';
 
+if (typeof window !== 'undefined' && !window.__canvas2d_cache_stats) {
+  window.__canvas2d_cache_stats = { rebuilds: 0, hits: 0 };
+}
+
 export class Canvas2DRenderer {
   /**
    * @param {HTMLCanvasElement} canvas 
@@ -22,6 +26,9 @@ export class Canvas2DRenderer {
     this.screenShakeTime = 0;
     this.screenShakeIntensity = 0;
     this.transitionEffect = null; // { type: 'fade'|'wipe'|'dissolve', progress: 0 }
+
+    this._paperCache = null;
+    this._paperCacheKey = null;
   }
 
   resize(width, height) {
@@ -44,6 +51,24 @@ export class Canvas2DRenderer {
     this.particles.push(particle);
   }
 
+  _getPaperLayer(paperColor) {
+    const key = paperColor + '|' + this.width + 'x' + this.height;
+    if (this._paperCache && this._paperCacheKey === key) {
+      if (window.__canvas2d_cache_stats) window.__canvas2d_cache_stats.hits++;
+      return this._paperCache;
+    }
+    const c = (typeof document !== 'undefined' && document.createElement) ? document.createElement('canvas') : { width: this.width, height: this.height, getContext: () => ({ fillStyle: '', fillRect: () => {} }) };
+    c.width = this.width;
+    c.height = this.height;
+    const cx = c.getContext('2d');
+    cx.fillStyle = paperColor;
+    cx.fillRect(0, 0, this.width, this.height);
+    this._paperCache = c;
+    this._paperCacheKey = key;
+    if (window.__canvas2d_cache_stats) window.__canvas2d_cache_stats.rebuilds++;
+    return c;
+  }
+
   render(sceneData, time = 0) {
     const ctx = this.ctx;
     ctx.save();
@@ -57,9 +82,9 @@ export class Canvas2DRenderer {
     }
     ctx.translate(shakeX, shakeY);
 
-    // Clear background (Warm drawing paper color)
-    ctx.fillStyle = sceneData.backgroundPaper || '#fdfbf7';
-    ctx.fillRect(0, 0, this.width, this.height);
+    // Clear background (Warm drawing paper color via cache)
+    const paperColor = sceneData.backgroundPaper || '#fdfbf7';
+    ctx.drawImage(this._getPaperLayer(paperColor), 0, 0);
 
     // Parallax background layers
     const layers = sceneData.layers || [
@@ -204,5 +229,7 @@ export class Canvas2DRenderer {
 
   dispose() {
     this.particles = [];
+    this._paperCache = null;
+    this._paperCacheKey = null;
   }
 }
