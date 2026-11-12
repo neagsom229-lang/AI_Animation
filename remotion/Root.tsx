@@ -8,6 +8,7 @@ import { Composition } from 'remotion';
 import { DeterminismTest } from './compositions/DeterminismTest';
 import { KuanimationScene } from './compositions/KuanimationScene';
 import type { KuanimationSceneProps } from './compositions/KuanimationScene';
+import { Scene10s } from './compositions/Scene10s';
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -31,6 +32,17 @@ export const RemotionRoot: React.FC = () => {
         width={1920}
         height={1080}
         defaultProps={{ rig: 'dolly', mood: 'warm dawn' }}
+      />
+
+      {/* Phase 2 verification: 10-second walking character scene. */}
+      <Composition
+        id="Scene10s"
+        component={Scene10s}
+        durationInFrames={300}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={{ rig: 'handheld', mood: 'gold dust' }}
       />
     </>
   );

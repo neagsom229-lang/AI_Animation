@@ -20,12 +20,15 @@
     "@remotion/renderer": "^4.0.542",
     "@remotion/three": "^4.0.542",
     "@types/react": "^19.3.0",
+    "anima3d": "^0.70.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "remotion": "^4.0.542",
+    "simplex-noise": "^4.0.3",
     "three": "^0.160.1"
   },
   "devDependencies": {
+    "typescript": "^7.0.2",
     "vite": "5.4.2"
   }
 }

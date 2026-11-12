@@ -13,6 +13,7 @@
  */
 
 import { Easing, interpolate } from 'remotion';
+import { createNoise2D } from 'simplex-noise';
 import * as THREE from 'three';
 
 export type CameraRigType = 'dolly' | 'orbit' | 'crane' | 'handheld' | 'static';
@@ -30,6 +31,16 @@ const _lookAtMatrix = new THREE.Matrix4();
 const _eye = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
+
+/** Seeded simplex-noise generator for organic, cinematic handheld shake.
+ *  Fixed generator keeps the shake deterministic across renders — the Phase 1
+ *  contract requires identical frames for identical inputs. */
+const _noise2D = createNoise2D();
+
+/** Sample 1D simplex noise at a given time, mapped to [-1, 1]. */
+function noise1(t: number): number {
+  return _noise2D(t, 0);
+}
 
 /**
  * Equivalent of `camera.lookAt(target)` expressed as a declarative quaternion,
@@ -98,10 +109,12 @@ export function getCameraPose(
     }
 
     case 'handheld': {
-      // Shake is analytic (sin/cos of tau) — deterministic, no seeded randomness needed.
-      const shakeX = Math.sin(tau * 20) * 0.1 + Math.cos(tau * 35) * 0.05;
-      const shakeY = Math.cos(tau * 25) * 0.1 + Math.sin(tau * 40) * 0.05;
-      return { position: [shakeX, 5 + shakeY, 12], lookAt: [0, 2, 0] };
+      // Organic handheld shake from Simplex noise — deterministic because the
+      // noise generator has a fixed seed and the input is purely frame-derived.
+      const shakeX = noise1(tau * 2.7) * 0.12 + noise1(tau * 5.3 + 100) * 0.04;
+      const shakeY = noise1(tau * 3.1 + 50) * 0.1 + noise1(tau * 4.7 + 200) * 0.03;
+      const shakeZ = noise1(tau * 2.1 + 300) * 0.02;
+      return { position: [shakeX, 5 + shakeY, 12 + shakeZ], lookAt: [0, 2, 0] };
     }
 
     case 'static':

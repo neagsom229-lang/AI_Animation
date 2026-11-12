@@ -1,75 +1,69 @@
-# Kuanimation Studio & Agent Skill
+# Kuanimation Studio
 
-Kuanimation is an [Agent Skill](https://agentskills.io/specification) and modern Web Studio for making illustrated animated stories and explainers. It features a dual 2D Pencil Sketch and 3D WebGL (Three.js) engine with post-processing (Bloom, Depth of Field), timeline scrubbing, multilingual support (English & Khmer), audio narration, and WebM video recording With highly performance well movement.
+Professional, frame-deterministic 3D animation and motion graphics studio powered by **Remotion**, **Three.js**, and **AI Agent Skills**.
 
 ---
 
-## Getting Started & Runnable App
+## Architecture
 
-To open the interactive Studio in your browser:
+```
+┌────────────────────────────────────────────────────────┐
+│                   AI Agent / MCP                       │
+│        (video-shotcraft, kinetic-reel, awb-mcp)        │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                   Remotion Studio                      │
+│            (Deterministic Frame Engine)                │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                   @remotion/three                      │
+│             (<ThreeCanvas width, height>)              │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│      Pure Math Animation & Seeded Randomness           │
+│  (getCameraPose, useCurrentFrame, anima3d, simplex)    │
+└────────────────────────────────────────────────────────┘
+```
 
+---
+
+## Getting Started
+
+### 1. Install Dependencies
 ```bash
 npm install
-npm run dev
 ```
 
-To run the automated test suite:
+### 2. Launch Remotion Studio
+Preview and scrub compositions interactively:
+```bash
+npm run remotion:studio
+```
 
+### 3. Verify Determinism Contract
+Run the test suite and verify byte-identical video + pixel-identical frame hashes:
 ```bash
 npm test
+npm run verify:determinism
+```
+
+### 4. Render Production Video
+```bash
+npx remotion render DeterminismTest out/determinism-test.mp4 --codec=h264
+npx remotion render Scene10s out/scene10s.mp4 --codec=h264
 ```
 
 ---
 
-## Architecture Overview
+## Prompting the Agent
 
-- **`src/core/engine.js`**: Timeline scheduler, easing library (`Easing`), keyframe interpolation, and particle systems.
-- **`src/core/story.js`**: Data-driven story format (`Story`, `Scene`, `Character`), validation, and offline generation fallbacks.
-- **`src/render/canvas2d.js`**: 2D Pencil Sketch renderer featuring layered scenes, parallax background scrolling, procedural character sprites, hatching textures, weather effects, vignette lighting, screen shake, and scene transitions (fade, wipe, dissolve).
-- **`src/render/three3d.js`**: 3D Three.js scene manager with procedural geometry, camera rigs (`dolly`, `orbit`, `crane`, `handheld`), mood lighting presets, and `EffectComposer` post-processing (Unreal Bloom & Depth of Field Bokeh), with quality toggles for low-end devices.
-- **`src/audio/audio.js`**: Web Audio API tone synthesis and speech narration manager.
-- **`src/ui/app.js`**: Modern Studio UI controller hosting story prompt panel, timeline scrubber, theme toggle, JSON import/export, and MediaRecorder.
-
----
-
-## How to Add a Story
-
-1. Create a JSON story file in `src/stories/` (or reference a custom JSON object) conforming to the `Story` schema:
-   ```json
-   {
-     "title": "My Story Title",
-     "genre": "historical",
-     "theme": "Story theme description",
-     "tone": "epic",
-     "language": "en",
-     "characters": [
-       { "id": "hero", "name": "Hero Name", "role": "Protagonist" }
-     ],
-     "scenes": [
-       {
-         "id": "scene1",
-         "name": "Opening Scene",
-         "mood": "warm dawn",
-         "dur": 6,
-         "camera": "dolly",
-         "renderer": "2d",
-         "dialogue": [
-           { "speaker": "hero", "text": "Hello world!", "subtitle": "Hello." }
-         ]
-       }
-     ]
-   }
-   ```
-2. Load or import the story JSON in `AnimationStudioApp` (`src/ui/app.js`) or select it via the genre/prompt panel.
-
----
-
-## Accessibility & Reduced Motion
-
-- **Keyboard Accessibility**: All studio controls, buttons, scrubbers, and selects are fully keyboard navigable with standard focus rings and ARIA attributes.
-- **Reduced Motion**: Respects `prefers-reduced-motion: media` queries, automatically minimizing or disabling heavy procedural animations and transitions for users sensitive to motion.
-
----
-
-## License & Security
-- Keep credentials out of Git. Never commit `.env` or API keys.
+Example prompts to generate new scenes:
+- *"Generate a 15-second explainer composition with a crane-down camera move and warm dawn mood."*
+- *"Add a new walking character composition with custom narration and seeded procedural gait."*
+- *"Create a 5-second orbit shot with glowing dust particles and cinematic handheld shake."*

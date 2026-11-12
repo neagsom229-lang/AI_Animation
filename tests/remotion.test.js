@@ -176,7 +176,7 @@ test('handheld rig shake stays bounded (no exploding values)', async () => {
   for (let frame = 0; frame < duration; frame += 3) {
     const [x, y, z] = getCameraPose('handheld', frame, 30, duration).position;
     assert.ok(Math.abs(x) <= 0.16 && Math.abs(y - 5) <= 0.16, `shake out of bounds at frame ${frame}`);
-    assert.ok(Math.abs(z - 12) < 1e-9);
+    assert.ok(Math.abs(z - 12) <= 0.03, `z shake out of bounds at frame ${frame}: ${z}`);
   }
 });
 
