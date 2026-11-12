@@ -11,14 +11,10 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MoodLightingPresets, resolveMood } from './moods.js';
 
-export const MoodLightingPresets = {
-  'warm dawn': { ambient: 0xffe8d6, directional: 0xffb347, fog: 0xffe8d6, intensity: 1.2 },
-  'gold dust': { ambient: 0xfff0c2, directional: 0xffc857, fog: 0xfff0c2, intensity: 1.4 },
-  'night storm': { ambient: 0x1a233a, directional: 0x4a6fa5, fog: 0x0b132b, intensity: 0.6 },
-  'paper': { ambient: 0xfffcf5, directional: 0xffffff, fog: 0xfffcf5, intensity: 1.0 },
-  'green': { ambient: 0xd8f3dc, directional: 0x52b788, fog: 0xd8f3dc, intensity: 1.1 }
-};
+// Re-exported for backwards compatibility with existing consumers.
+export { MoodLightingPresets };
 
 export class ThreeSceneManager {
   /**
@@ -111,7 +107,7 @@ export class ThreeSceneManager {
   }
 
   setMood(moodName) {
-    const preset = MoodLightingPresets[moodName] || MoodLightingPresets['warm dawn'];
+    const preset = resolveMood(moodName);
     this.ambientLight.color.setHex(preset.ambient);
     this.ambientLight.intensity = preset.intensity;
     this.dirLight.color.setHex(preset.directional);

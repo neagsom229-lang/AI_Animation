@@ -1,0 +1,111 @@
+/**
+ * @fileoverview Pure camera rig evaluation for the Remotion pipeline.
+ *
+ * Ported 1:1 from `src/render/three3d.js` `ThreeSceneManager.applyCameraRig()`.
+ * The legacy rig mutated `camera.position` inside a wall-clock render loop;
+ * here every pose is a pure mathematical function of the Remotion frame index:
+ *
+ *   pose = getCameraPose(rig, useCurrentFrame(), fps, durationInFrames)
+ *
+ * No THREE.Clock, no requestAnimationFrame, no wall-clock time — rendering N
+ * times with the same frame index yields the identical pose (Phase 1 contract).
+ * @module remotion/lib/camera
+ */
+
+import { Easing, interpolate } from 'remotion';
+import * as THREE from 'three';
+
+export type CameraRigType = 'dolly' | 'orbit' | 'crane' | 'handheld' | 'static';
+
+export type Vec3 = [number, number, number];
+
+export interface CameraPose {
+  position: Vec3;
+  /** World-space point the camera must look at (converted to a quaternion by `lookAtQuaternion`). */
+  lookAt: Vec3;
+}
+
+/** Reusable scratch matrix (three.js camera convention: -Z axis points at the target). */
+const _lookAtMatrix = new THREE.Matrix4();
+const _eye = new THREE.Vector3();
+const _target = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Equivalent of `camera.lookAt(target)` expressed as a declarative quaternion,
+ * so the camera never needs imperative mutation inside the render loop.
+ */
+export function lookAtQuaternion(position: Vec3, target: Vec3): THREE.Quaternion {
+  _lookAtMatrix.lookAt(
+    _eye.set(position[0], position[1], position[2]),
+    _target.set(target[0], target[1], target[2]),
+    _up
+  );
+  return new THREE.Quaternion().setFromRotationMatrix(_lookAtMatrix);
+}
+
+/**
+ * Evaluate a camera rig at an exact frame index.
+ *
+ * @param rig - Rig name, matching the legacy `applyCameraRig` rigType values.
+ * @param frame - Remotion frame index (`useCurrentFrame()`), never seconds-from-clock.
+ * @param fps - Frames per second (`useVideoConfig().fps`).
+ * @param durationInFrames - Shot length, used to ease motion so it settles within the composition.
+ * @returns The deterministic camera pose for this frame.
+ */
+export function getCameraPose(
+  rig: CameraRigType,
+  frame: number,
+  fps: number,
+  durationInFrames: number
+): CameraPose {
+  // tau = scene seconds, derived from the frame contract: tau === frame / fps.
+  const tau = frame / fps;
+
+  switch (rig) {
+    case 'dolly': {
+      // Legacy: z = 15 - tau * 3 (linear). Now eased so the push completes
+      // exactly at the end of the shot, using Remotion's interpolate().
+      const z = interpolate(frame, [0, durationInFrames], [15, 12], {
+        easing: Easing.inOut(Easing.cubic),
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp'
+      });
+      const y = 5 + Math.sin(tau * 0.5) * 0.5;
+      return { position: [0, y, z], lookAt: [0, 2, 0] };
+    }
+
+    case 'orbit': {
+      const angle = tau * 0.8;
+      return {
+        position: [Math.sin(angle) * 12, 6, Math.cos(angle) * 12],
+        lookAt: [0, 2, 0]
+      };
+    }
+
+    case 'crane': {
+      const rise = interpolate(frame, [0, durationInFrames], [0, 4], {
+        easing: Easing.inOut(Easing.quad),
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp'
+      });
+      const z = interpolate(frame, [0, durationInFrames], [12, 8], {
+        easing: Easing.inOut(Easing.quad),
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp'
+      });
+      return { position: [0, 2 + rise, z], lookAt: [0, 1, 0] };
+    }
+
+    case 'handheld': {
+      // Shake is analytic (sin/cos of tau) — deterministic, no seeded randomness needed.
+      const shakeX = Math.sin(tau * 20) * 0.1 + Math.cos(tau * 35) * 0.05;
+      const shakeY = Math.cos(tau * 25) * 0.1 + Math.sin(tau * 40) * 0.05;
+      return { position: [shakeX, 5 + shakeY, 12], lookAt: [0, 2, 0] };
+    }
+
+    case 'static':
+    default:
+      return { position: [0, 5, 15], lookAt: [0, 2, 0] };
+  }
+}
