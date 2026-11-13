@@ -24,7 +24,7 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
 import { PerspectiveCamera } from '@react-three/drei';
 import { resolveMood } from '../../src/render/moods.js';
-import { getCameraPose, lookAtQuaternion, type CameraRigType } from '../lib/camera';
+import { getCameraPose, lookAtQuaternion, type CameraRigType } from '../lib/camera.ts';
 import { DustParticles } from './DustParticles';
 import { ProceduralCharacter } from './ProceduralCharacter';
 import { TempleSet } from './TempleSet';

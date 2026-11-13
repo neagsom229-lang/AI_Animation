@@ -28,6 +28,61 @@ test('validateStory throws on invalid story', () => {
   assert.throws(() => validateStory({ title: 'A', genre: 'a', theme: 'b', characters: [{id: '1', name: 'A'}], scenes: [{ id: '1', name: 'S', dur: 0 }] }), /positive dur/);
 });
 
+test('validateStory rejects unknown camera with the valid list in the message', () => {
+  const story = {
+    title: 'T', genre: 'g', theme: 'th', language: 'en',
+    characters: [{ id: 'n', name: 'N' }],
+    scenes: [{ id: 's1', name: 'S', dur: 3, camera: 'spiral' }]
+  };
+  assert.throws(() => validateStory(story), (err) => {
+    return /unknown camera "spiral"/.test(err.message) && err.message.includes('dolly, orbit, crane, handheld, static');
+  });
+});
+
+test('validateStory rejects unknown mood with the valid list in the message', () => {
+  const story = {
+    title: 'T', genre: 'g', theme: 'th', language: 'en',
+    characters: [{ id: 'n', name: 'N' }],
+    scenes: [{ id: 's1', name: 'S', dur: 3, mood: 'sunset' }]
+  };
+  assert.throws(() => validateStory(story), (err) => {
+    return /unknown mood "sunset"/.test(err.message) && err.message.includes('warm dawn');
+  });
+});
+
+test('validateStory rejects unknown action and unknown action character', () => {
+  const base = {
+    title: 'T', genre: 'g', theme: 'th', language: 'en',
+    characters: [{ id: 'hero', name: 'H' }],
+  };
+  const badAction = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, actions: [{ character: 'hero', action: 'fly' }] }] };
+  assert.throws(() => validateStory(badAction), (err) => {
+    return /has unknown action "fly"/.test(err.message) && err.message.includes('idle, walk, talk, turn, gesture, react');
+  });
+  const badChar = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, actions: [{ character: 'ghost', action: 'walk' }] }] };
+  assert.throws(() => validateStory(badChar), /unknown character "ghost"/);
+});
+
+test('validateStory rejects empty dialogue text and unknown speaker', () => {
+  const base = {
+    title: 'T', genre: 'g', theme: 'th', language: 'en',
+    characters: [{ id: 'hero', name: 'H' }],
+  };
+  const emptyText = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, dialogue: [{ speaker: 'hero', text: '   ' }] }] };
+  assert.throws(() => validateStory(emptyText), /empty or missing text/);
+  const badSpeaker = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, dialogue: [{ speaker: 'nobody', text: 'hello' }] }] };
+  assert.throws(() => validateStory(badSpeaker), /unknown speaker "nobody"/);
+});
+
+test('validateStory rejects unknown language', () => {
+  const story = {
+    title: 'T', genre: 'g', theme: 'th', language: 'fr',
+    characters: [{ id: 'n', name: 'N' }],
+    scenes: [{ id: 's1', name: 'S', dur: 3 }]
+  };
+  assert.throws(() => validateStory(story), (err) => /language "fr" is unknown/.test(err.message) && err.message.includes('km, en'));
+});
+
 test('generateStory offline fallback produces valid story', async () => {
   const story = await generateStory({ genre: 'historical', theme: 'Water and empire' });
   assert.strictEqual(validateStory(story), true);

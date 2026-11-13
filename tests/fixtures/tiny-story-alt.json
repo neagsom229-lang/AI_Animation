@@ -1,0 +1,32 @@
+{
+  "title": "Tiny Fixture B",
+  "genre": "historical",
+  "theme": "Determinism test fixture (alternate)",
+  "tone": "calm",
+  "language": "en",
+  "characters": [
+    { "id": "narrator", "name": "Narrator", "role": "Voice" }
+  ],
+  "scenes": [
+    {
+      "id": "t1",
+      "name": "Scene One",
+      "mood": "paper",
+      "dur": 3,
+      "camera": "crane",
+      "dialogue": [
+        { "speaker": "narrator", "text": "Green life awakens from the seed.", "subtitle": "PAPER WORLD" }
+      ]
+    },
+    {
+      "id": "t2",
+      "name": "Scene Two",
+      "mood": "green",
+      "dur": 3,
+      "camera": "handheld",
+      "dialogue": [
+        { "speaker": "narrator", "text": "The sunflower turns to follow the sun.", "subtitle": "GREEN VALLEY" }
+      ]
+    }
+  ]
+}

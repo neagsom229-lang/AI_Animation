@@ -40,6 +40,14 @@ export interface AnimaCharacterProps {
   lookAtTarget?: [number, number, number];
   /** Scale the whole character. */
   scale?: number;
+  /** Story action: idle | walk | talk | turn | gesture | react (default idle). */
+  action?: CharacterAction;
+  /** Scene length in frames; drives actions that evolve over the scene. */
+  durationInFrames?: number;
+  /** Audio loudness envelope (20Hz array) for precise lip-sync. */
+  env?: number[];
+  /** Line start frame in the scene for env timing. */
+  lineStartFrame?: number;
 }
 
 /** A phoneme segment with timing. */
@@ -134,6 +142,39 @@ export function computeMouthShape(
   }
 
   return shape;
+}
+
+/**
+ * Sample the loudness envelope at an exact frame.
+ *
+ * The envelope is a 20 Hz array (one value per 50 ms RMS window, produced by
+ * scripts/generate-voice.py). Mapping frame → env index:
+ *
+ *     rel = (frame - lineStartFrame) / fps * 20
+ *
+ * Behaviour:
+ *   - frame before the line starts or after the audio ends → 0 (mouth closed
+ *     outside speech),
+ *   - between samples → linear interpolation (light temporal smoothing),
+ *   - result clamped to [0, 1].
+ *
+ * Pure function of (env, frame, fps, lineStartFrame).
+ */
+export function envelopeAmplitude(
+  env: number[] | undefined,
+  frame: number,
+  fps: number,
+  lineStartFrame: number
+): number {
+  if (!env || env.length === 0) return 0;
+  const rel = ((frame - lineStartFrame) / fps) * 20;
+  if (rel < 0 || rel > env.length - 1) return 0;
+  const k = Math.floor(rel);
+  const frac = rel - k;
+  const a = env[Math.min(k, env.length - 1)];
+  const b = env[Math.min(k + 1, env.length - 1)];
+  const value = a + (b - a) * frac;
+  return Math.max(0, Math.min(1, value));
 }
 
 /** Compute blink factor 0 (open) → 1 (closed) at a given frame. */
@@ -273,4 +314,94 @@ export function applyLocomotion(
  */
 export function createGaitClips(rig: HumanoidRig): LocomotionClips {
   return createLocomotionClips(rig);
+}
+
+/** Character actions available from story JSON. */
+export type CharacterAction = 'idle' | 'walk' | 'talk' | 'turn' | 'gesture' | 'react';
+
+/**
+ * Planar speed for the locomotion clip chosen by `action`.
+ * walk keeps stride; every other action is stationary (idle clip).
+ */
+export function actionSpeed(action: CharacterAction): number {
+  return action === 'walk' ? 1.2 : 0;
+}
+
+/**
+ * Apply a story action on top of the base locomotion clip.
+ * Pure function of (rig, action, frame, fps, durationInFrames, seed):
+ * the same inputs always produce the same pose.
+ *
+ * - idle:   base idle clip, no additive motion.
+ * - walk:   walk clip at stride speed (handled via actionSpeed).
+ * - talk:   idle + gentle head nods while speaking.
+ * - turn:   rotate the character to face the opposite side over the scene.
+ * - gesture: periodic one-arm raise on a seeded rhythm.
+ * - react:  a quick startle dip at a seeded moment in the scene.
+ */
+export function applyAction(
+  rig: HumanoidRig,
+  action: CharacterAction,
+  frame: number,
+  fps: number,
+  durationInFrames: number,
+  seed: number
+): void {
+  const time = frame / fps;
+  const sceneDur = durationInFrames / fps;
+
+  const head = rig.bones['Head'];
+  const rightArm = rig.bones['RightArm'];
+  const leftArm = rig.bones['LeftArm'];
+  const chest = rig.bones['Chest'];
+
+  switch (action) {
+    case 'turn': {
+      // Rotate to face the opposite direction over the whole scene, eased.
+      const progress = Math.max(0, Math.min(1, frame / Math.max(1, durationInFrames)));
+      const eased = progress * progress * (3 - 2 * progress);
+      rig.object.rotation.y = Math.PI * eased;
+      break;
+    }
+
+    case 'talk': {
+      // Gentle nodding while speaking (two nods per second, small amplitude).
+      if (head) head.rotation.x = 0.08 * Math.sin(time * Math.PI * 2 * 1.1);
+      if (chest) chest.rotation.y = 0.03 * Math.sin(time * Math.PI * 2 * 0.55);
+      break;
+    }
+
+    case 'gesture': {
+      // One arm rises and lowers on a seeded 2.4 s rhythm (deterministic
+      // phase offset derived from the seed).
+      const phase = (time / 2.4 + (seed % 7) / 7) % 1;
+      const lift = Math.max(0, Math.sin(phase * Math.PI * 2));
+      if (rightArm) rightArm.rotation.x = -lift * 1.9; // negative X raises the arm
+      if (rightArm) rightArm.rotation.z = -lift * 0.35;
+      if (head) head.rotation.y = 0.15 * lift;
+      break;
+    }
+
+    case 'react': {
+      // A quick startle dip at a seeded moment (25-50% into the scene),
+      // then a recovery breath.
+      const tStart = sceneDur * (0.25 + (seed % 5) / 20);
+      const dt = time - tStart;
+      if (dt >= 0) {
+        // Sharp dip (0-0.25 s), eased recovery (0.25-0.9 s).
+        const dip = dt < 0.25 ? dt / 0.25 : Math.max(0, 1 - (dt - 0.25) / 0.65);
+        if (head) head.rotation.x = 0.35 * dip;
+        if (chest) chest.rotation.x = 0.12 * dip;
+        if (leftArm) leftArm.rotation.z = 0.5 * dip;
+        if (rightArm) rightArm.rotation.z = -0.5 * dip;
+      }
+      break;
+    }
+
+    case 'idle':
+    case 'walk':
+    default:
+      // Base clip only.
+      break;
+  }
 }

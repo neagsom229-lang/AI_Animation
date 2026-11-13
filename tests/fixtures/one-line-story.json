@@ -1,0 +1,22 @@
+{
+  "title": "One-line fixture story",
+  "genre": "historical",
+  "theme": "Minimal pipeline test fixture",
+  "tone": "epic",
+  "language": "km",
+  "characters": [
+    { "id": "narrator", "name": "Narrator", "role": "Voice" }
+  ],
+  "scenes": [
+    {
+      "id": "t1",
+      "name": "Greeting",
+      "mood": "warm dawn",
+      "dur": 3,
+      "camera": "static",
+      "dialogue": [
+        { "speaker": "narrator", "text": "សួស្តី", "subtitle": "Hello" }
+      ]
+    }
+  ]
+}

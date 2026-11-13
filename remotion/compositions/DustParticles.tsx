@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
-import { makeDust } from '../lib/randomness';
+import { makeDust } from '../lib/randomness.ts';
 
 export interface DustParticlesProps {
   count?: number;

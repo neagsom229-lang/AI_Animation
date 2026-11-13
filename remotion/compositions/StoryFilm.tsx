@@ -9,63 +9,65 @@ import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig, Audio, staticF
 import { ThreeCanvas } from '@remotion/three';
 import { PerspectiveCamera } from '@react-three/drei';
 import { resolveMood } from '../../src/render/moods.js';
-import { getCameraPose, lookAtQuaternion } from '../lib/camera';
+import { getCameraPose, lookAtQuaternion } from '../lib/camera.ts';
+import { buildStoryTimeline, type TimedScene, type TimedLine } from '../lib/story-timing.ts';
 import { AnimaCharacter } from './AnimaCharacter';
 import { DustParticles } from './DustParticles';
 
 export interface StoryFilmProps {
   story?: any;
   voiceData?: any;
+  /** Set by make.mjs in --mock mode; stamps a visible MOCK VOICE label. */
+  isMock?: boolean;
 }
 
 export const StoryFilm: React.FC<StoryFilmProps> = ({
   story,
-  voiceData
+  voiceData,
+  isMock
 }) => {
   const { fps } = useVideoConfig();
 
   if (!story || !voiceData) {
     return (
-      <AbsoluteFill style={{ backgroundColor: '#111', color: '#fff', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '32px' }}>
-        Loading Story & Voice Data...
+      <AbsoluteFill style={{ backgroundColor: '#111', color: '#fff', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '28px', flexDirection: 'column' }}>
+        <div>StoryFilm needs inputProps: story + voiceData</div>
+        <div style={{ opacity: 0.6, fontSize: '18px' }}>Render it with: node scripts/make.mjs --story src/stories/&lt;story&gt;.json</div>
       </AbsoluteFill>
     );
   }
 
-  let currentFrame = 0;
-  const scenesWithFrames = (voiceData.scenes || []).map((sceneVoice: any, sIdx: number) => {
-    const sceneSpec = (story.scenes && story.scenes[sIdx]) || {};
-    const durSec = sceneVoice.dur || 5;
-    const durFrames = Math.round(durSec * fps);
-    const startFrame = currentFrame;
-    currentFrame += durFrames;
-
-    let lineCurrentFrame = 0;
-    const linesWithFrames = (sceneVoice.lines || []).map((line: any) => {
-      const lineDurFrames = Math.round(line.dur * fps);
-      const lStart = lineCurrentFrame;
-      lineCurrentFrame += lineDurFrames;
-      return {
-        ...line,
-        startFrame: lStart,
-        durationInFrames: lineDurFrames
-      };
-    });
-
-    return {
-      ...sceneVoice,
-      spec: sceneSpec,
-      startFrame,
-      durationInFrames: durFrames,
-      lines: linesWithFrames
-    };
-  });
+  // Timeline is a pure function of voiceData + fps (see remotion/lib/story-timing.ts).
+  const timeline = buildStoryTimeline(voiceData, fps);
+  const sceneSpecs = story.scenes || [];
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      {scenesWithFrames.map((scene: any, sIdx: number) => {
-        const mood = scene.spec.mood || 'warm dawn';
-        const rig = scene.spec.camera || 'dolly';
+      {isMock && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 40,
+            left: 40,
+            zIndex: 100,
+            padding: '10px 24px',
+            backgroundColor: 'rgba(180, 20, 20, 0.85)',
+            color: '#fff',
+            fontFamily: 'monospace',
+            fontSize: '34px',
+            fontWeight: 700,
+            letterSpacing: 2,
+            border: '3px solid #fff',
+            borderRadius: 6,
+          }}
+        >
+          MOCK VOICE
+        </div>
+      )}
+      {timeline.scenes.map((scene: TimedScene, sIdx: number) => {
+        const sceneSpec = sceneSpecs[sIdx] || {};
+        const mood = sceneSpec.mood || 'warm dawn';
+        const rig = sceneSpec.camera || 'dolly';
         const preset = resolveMood(mood);
 
         return (
@@ -76,10 +78,10 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
           >
             <SceneRenderer
               scene={scene}
+              spec={sceneSpec}
               preset={preset}
               rig={rig}
               fps={fps}
-              durationInFrames={scene.durationInFrames}
             />
           </Sequence>
         );
@@ -89,27 +91,35 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
 };
 
 interface SceneRendererProps {
-  scene: any;
+  scene: TimedScene;
+  spec: any;
   preset: any;
   rig: string;
   fps: number;
-  durationInFrames: number;
 }
 
 const SceneRenderer: React.FC<SceneRendererProps> = ({
   scene,
+  spec,
   preset,
   rig,
-  fps,
-  durationInFrames
+  fps
 }) => {
+  // Frames inside a <Sequence> are LOCAL to that sequence.
   const frame = useCurrentFrame();
+  const durationInFrames = scene.durationInFrames;
   const pose = getCameraPose(rig as any, frame, fps, durationInFrames);
   const cameraRotation = lookAtQuaternion(pose.position, pose.lookAt);
 
-  let activeLine = scene.lines[0];
-  for (const line of scene.lines) {
-    if (frame >= line.startFrame && frame < line.startFrame + line.durationInFrames) {
+  // Convert absolute line frames to sequence-local frames.
+  const localLines = scene.lines.map((line: TimedLine) => ({
+    ...line,
+    localStart: line.startFrame - scene.startFrame,
+  }));
+
+  let activeLine = localLines[0];
+  for (const line of localLines) {
+    if (frame >= line.localStart && frame < line.localStart + line.durationInFrames) {
       activeLine = line;
       break;
     }
@@ -150,15 +160,17 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
           narration={activeLine ? activeLine.text : ''}
           lookAtTarget={[0, 2, -5]}
           scale={1}
+          env={activeLine ? activeLine.env : undefined}
+          lineStartFrame={activeLine ? activeLine.localStart : 0}
         />
 
         <DustParticles count={25} />
       </ThreeCanvas>
 
-      {scene.lines.map((line: any, lIdx: number) => (
+      {localLines.map((line: any, lIdx: number) => (
         <Sequence
           key={lIdx}
-          from={line.startFrame}
+          from={line.localStart}
           durationInFrames={line.durationInFrames}
         >
           <Audio src={staticFile(line.file)} />
@@ -192,18 +204,20 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
 };
 
 export const calculateStoryMetadata = ({ props }: { props: Record<string, any> }) => {
-  const voiceData = props?.voiceData;
-  let totalSec = 0;
-  if (voiceData && voiceData.scenes) {
-    for (const sc of voiceData.scenes) {
-      totalSec += sc.dur || 5;
-    }
-  } else {
-    totalSec = 10;
+  if (!props || !props.voiceData) {
+    throw new Error(
+      'StoryFilm requires inputProps.voiceData (and inputProps.story). ' +
+      'Generate them with: node scripts/make.mjs --story src/stories/<story>.json'
+    );
   }
+  if (!props.story) {
+    throw new Error('StoryFilm requires inputProps.story.');
+  }
+  // Total duration = sum of real decoded voice durations + inter-scene padding.
+  const timeline = buildStoryTimeline(props.voiceData, 30);
   const fps = 30;
   return {
-    durationInFrames: Math.max(30, Math.round(totalSec * fps)),
+    durationInFrames: Math.max(1, timeline.durationInFrames),
     fps,
     width: 1920,
     height: 1080,

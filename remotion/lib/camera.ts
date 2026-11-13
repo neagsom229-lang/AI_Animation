@@ -15,6 +15,7 @@
 import { Easing, interpolate } from 'remotion';
 import { createNoise2D } from 'simplex-noise';
 import * as THREE from 'three';
+import { mulberry32 } from './randomness.ts';
 
 export type CameraRigType = 'dolly' | 'orbit' | 'crane' | 'handheld' | 'static';
 
@@ -33,9 +34,11 @@ const _target = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 
 /** Seeded simplex-noise generator for organic, cinematic handheld shake.
- *  Fixed generator keeps the shake deterministic across renders — the Phase 1
- *  contract requires identical frames for identical inputs. */
-const _noise2D = createNoise2D();
+ *  The PRNG is mulberry32 with a fixed seed, so the noise field is identical
+ *  in every process and every render — the Phase 1 contract requires
+ *  identical frames for identical inputs. (createNoise2D() with no argument
+ *  would silently use Math.random() and break cross-run determinism.) */
+const _noise2D = createNoise2D(mulberry32(0x5eed1234));
 
 /** Sample 1D simplex noise at a given time, mapped to [-1, 1]. */
 function noise1(t: number): number {

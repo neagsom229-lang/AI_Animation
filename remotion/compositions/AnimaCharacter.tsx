@@ -18,13 +18,17 @@ import {
   createCharacter,
   createGaitClips,
   applyLocomotion,
+  applyAction,
+  actionSpeed,
   computeMouthShape,
   computeBlink,
+  envelopeAmplitude,
   applyFacialAnimation,
   parseNarration,
   type PhonemeSegment,
   type AnimaCharacterProps,
-} from '../lib/anima';
+  type CharacterAction,
+} from '../lib/anima.ts';
 
 /**
  * Default 10-second narration phoneme track.
@@ -40,10 +44,13 @@ export const AnimaCharacter: React.FC<AnimaCharacterProps> = ({
   narration = DEFAULT_NARRATION,
   lookAtTarget = [8, 2, 0],
   scale = 1,
+  action = 'idle',
+  durationInFrames = 300,
+  env,
+  lineStartFrame = 0,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const time = frame / fps;
 
   // ------------------------------------------------------------------
   // Memoized character data (seeded → deterministic, created once).
@@ -53,14 +60,30 @@ export const AnimaCharacter: React.FC<AnimaCharacterProps> = ({
   const segments = React.useMemo(() => parseNarration(narration), [narration]);
 
   // ------------------------------------------------------------------
-  // Locomotion: apply walk/idle/run clip at this exact frame.
+  // Locomotion: the gait clip follows the story action. The `speed` prop is
+  // honoured when given, but the action decides the default.
   // ------------------------------------------------------------------
-  applyLocomotion(rig, clips, frame, fps, speed);
+  const gaitSpeed = speed !== 1.5 ? speed : actionSpeed(action);
+  applyLocomotion(rig, clips, frame, fps, gaitSpeed);
+
+  // ------------------------------------------------------------------
+  // Story action on top of the base clip (talk/turn/gesture/react).
+  // ------------------------------------------------------------------
+  applyAction(rig, action as CharacterAction, frame, fps, durationInFrames, seed);
 
   // ------------------------------------------------------------------
   // Facial animation: lip-sync + blink (pure functions of frame).
+  // With an envelope present, mouth open = env sample at this exact frame
+  // (clamped 0-1, lightly smoothed by interpolation); the mouth is closed
+  // outside the line's audio span. Viseme round/spread still come from the
+  // narration phonemes so vowels keep their shape.
   // ------------------------------------------------------------------
-  const mouth = computeMouthShape(frame, fps, segments);
+  const envAmp = envelopeAmplitude(env, frame, fps, lineStartFrame);
+  let mouth = computeMouthShape(frame, fps, segments);
+  mouth = {
+    ...mouth,
+    open: env ? envAmp : Math.max(mouth.open, envAmp),
+  };
   const blink = computeBlink(frame, fps);
   applyFacialAnimation(rig, mouth, blink);
 

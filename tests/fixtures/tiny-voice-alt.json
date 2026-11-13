@@ -1,0 +1,37 @@
+{
+  "story": "tests/fixtures/tiny-story-alt.json",
+  "title": "Tiny Fixture B",
+  "language": "en",
+  "voice": "fixture-tone-440hz",
+  "provider": "fixture",
+  "scenes": [
+    {
+      "id": "t1",
+      "name": "Scene One",
+      "dur": 1.0,
+      "lines": [
+        {
+          "file": "fixtures/tiny-silence.mp3",
+          "dur": 1.0,
+          "text": "Green life awakens from the seed.",
+          "subtitle": "PAPER WORLD",
+          "env": [0, 0.05, 0.2, 0.55, 0.8, 0.95, 1, 0.92, 0.7, 0.5, 0.35, 0.6, 0.85, 0.75, 0.55, 0.4, 0.25, 0.15, 0.05, 0]
+        }
+      ]
+    },
+    {
+      "id": "t2",
+      "name": "Scene Two",
+      "dur": 1.0,
+      "lines": [
+        {
+          "file": "fixtures/tiny-silence.mp3",
+          "dur": 1.0,
+          "text": "The sunflower turns to follow the sun.",
+          "subtitle": "GREEN VALLEY",
+          "env": [0, 0.1, 0.35, 0.65, 0.9, 1, 0.88, 0.66, 0.48, 0.3, 0.18, 0.42, 0.7, 0.9, 0.8, 0.6, 0.38, 0.2, 0.08, 0]
+        }
+      ]
+    }
+  ]
+}

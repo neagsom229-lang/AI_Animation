@@ -15,7 +15,7 @@ import { useCurrentFrame, useVideoConfig, interpolate, Easing } from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
 import { PerspectiveCamera } from '@react-three/drei';
 import { resolveMood } from '../../src/render/moods.js';
-import { getCameraPose, lookAtQuaternion, type CameraRigType } from '../lib/camera';
+import { getCameraPose, lookAtQuaternion, type CameraRigType } from '../lib/camera.ts';
 import { AnimaCharacter } from './AnimaCharacter';
 import { DustParticles } from './DustParticles';
 

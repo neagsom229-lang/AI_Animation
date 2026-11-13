@@ -1,0 +1,32 @@
+{
+  "title": "Tiny Fixture A",
+  "genre": "historical",
+  "theme": "Determinism test fixture",
+  "tone": "epic",
+  "language": "en",
+  "characters": [
+    { "id": "narrator", "name": "Narrator", "role": "Voice" }
+  ],
+  "scenes": [
+    {
+      "id": "t1",
+      "name": "Scene One",
+      "mood": "warm dawn",
+      "dur": 3,
+      "camera": "dolly",
+      "dialogue": [
+        { "speaker": "narrator", "text": "Stone temples rise in the forest.", "subtitle": "STONE TEMPLES RISE" }
+      ]
+    },
+    {
+      "id": "t2",
+      "name": "Scene Two",
+      "mood": "night storm",
+      "dur": 3,
+      "camera": "orbit",
+      "dialogue": [
+        { "speaker": "narrator", "text": "Water is life for the empire.", "subtitle": "WATER IS LIFE" }
+      ]
+    }
+  ]
+}
