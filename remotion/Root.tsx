@@ -9,6 +9,8 @@ import { DeterminismTest } from './compositions/DeterminismTest';
 import { KuanimationScene } from './compositions/KuanimationScene';
 import type { KuanimationSceneProps } from './compositions/KuanimationScene';
 import { Scene10s } from './compositions/Scene10s';
+import { KhmerEmpireExtended, durationInFrames, fps, width, height } from './compositions/KhmerEmpireExtended';
+import { StoryFilm, getStoryDurationInFrames } from './compositions/StoryFilm';
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -24,7 +26,7 @@ export const RemotionRoot: React.FC = () => {
       />
 
       {/* Reusable full scene with configurable rig + mood. */}
-      <Composition<KuanimationSceneProps>
+      <Composition
         id="KuanimationScene"
         component={KuanimationScene}
         durationInFrames={300}
@@ -43,6 +45,26 @@ export const RemotionRoot: React.FC = () => {
         width={1920}
         height={1080}
         defaultProps={{ rig: 'handheld', mood: 'gold dust' }}
+      />
+
+      {/* 2.5-minute Khmer Empire Extended vertical composition (1080x1920 @ 30fps, 4500 frames). */}
+      <Composition
+        id="KhmerEmpireExtended"
+        component={KhmerEmpireExtended}
+        durationInFrames={durationInFrames}
+        fps={fps}
+        width={width}
+        height={height}
+      />
+
+      {/* Phase 3 StoryFilm composition driven by story JSON and voice JSON. */}
+      <Composition
+        id="StoryFilm"
+        component={StoryFilm}
+        durationInFrames={getStoryDurationInFrames()}
+        fps={30}
+        width={1920}
+        height={1080}
       />
     </>
   );

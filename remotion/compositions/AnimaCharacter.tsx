@@ -13,7 +13,6 @@
 
 import React from 'react';
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from 'remotion';
-import { primitive } from '@react-three/drei';
 import * as THREE from 'three';
 import {
   createCharacter,
@@ -76,7 +75,7 @@ export const AnimaCharacter: React.FC<AnimaCharacterProps> = ({
     [0, 0.7, 0.7, 0],
     { easing: Easing.inOut(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
-  const head = rig.bones['head'];
+  const head = rig.bones['Head'];
   if (head) {
     head.rotation.y = headYaw;
   }

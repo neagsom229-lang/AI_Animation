@@ -88,7 +88,6 @@ export const Scene10s: React.FC<Scene10sProps> = ({
 };
 
 // 10 seconds @ 30 fps = 300 frames.
-Scene10s.defaultProps = { rig: 'handheld', mood: 'gold dust' };
 
 // Register as a standalone composition via Root.tsx instead.
 export const durationInFrames = 300;

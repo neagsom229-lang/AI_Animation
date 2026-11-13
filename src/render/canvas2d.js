@@ -76,8 +76,9 @@ export class Canvas2DRenderer {
     // Screen Shake Offset
     let shakeX = 0, shakeY = 0;
     if (this.screenShakeTime > 0) {
-      shakeX = (Math.random() - 0.5) * this.screenShakeIntensity;
-      shakeY = (Math.random() - 0.5) * this.screenShakeIntensity;
+      const shakeSeed = Math.floor(time * 100) + Math.floor(this.screenShakeTime * 1000);
+      shakeX = (Math.sin(shakeSeed * 12.9898) - 0.5) * this.screenShakeIntensity;
+      shakeY = (Math.sin(shakeSeed * 78.233) - 0.5) * this.screenShakeIntensity;
       this.screenShakeTime -= 0.016;
     }
     ctx.translate(shakeX, shakeY);

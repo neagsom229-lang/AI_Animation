@@ -83,19 +83,7 @@ const DEFAULT_PHONEMES: PhonemeSegment[] = [
  * Deterministic: no Math.random inside anima3d (seeded RNG only).
  */
 export function createCharacter(seed: number): HumanoidRig {
-  const originalRandom = Math.random;
-  let s = seed;
-  Math.random = () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ s >>> 15, s | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-  try {
-    return createHumanoid({ seed });
-  } finally {
-    Math.random = originalRandom;
-  }
+  return createHumanoid({ seed });
 }
 
 /**
@@ -151,7 +139,7 @@ export function computeMouthShape(
 /** Compute blink factor 0 (open) → 1 (closed) at a given frame. */
 export function computeBlink(frame: number, fps: number): number {
   const time = frame / fps;
-  const phase = (time * BLINK_RATE) % 1;
+  const phase = (time * Number(BLINK_RATE)) % 1;
   const blinkWidth = 0.12; // fraction of cycle the lid is closing/closed
   if (phase < blinkWidth) {
     const eased = phase / blinkWidth;
@@ -193,7 +181,7 @@ export function applyFacialAnimation(
 
 /** Get (or lazily create) a mouth socket group on the head bone. */
 function getOrCreateMouthSocket(rig: HumanoidRig): THREE.Group {
-  const head = rig.bones['head'];
+  const head = rig.bones['Head'] || (rig.bones as any)['head'];
   if (!head) return rig.object; // fallback
 
   let socket = head.userData.animaMouthSocket as THREE.Group | undefined;
@@ -212,7 +200,7 @@ function getOrCreateMouthSocket(rig: HumanoidRig): THREE.Group {
 
 /** Get (or lazily create) eyelid meshes on the head bone. */
 function getOrCreateEyelids(rig: HumanoidRig): THREE.Group {
-  const head = rig.bones['head'];
+  const head = rig.bones['Head'] || (rig.bones as any)['head'];
   if (!head) return new THREE.Group();
 
   let eyelids = head.userData.animaEyelids as THREE.Group | undefined;

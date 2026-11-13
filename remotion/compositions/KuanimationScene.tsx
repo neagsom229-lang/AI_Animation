@@ -31,9 +31,9 @@ import { TempleSet } from './TempleSet';
 
 export interface KuanimationSceneProps {
   /** Camera rig name, matching the legacy `applyCameraRig` rigType values. */
-  rig: CameraRigType;
+  rig?: CameraRigType;
   /** Mood lighting preset name (src/render/moods.js). */
-  mood: string;
+  mood?: string;
 }
 
 export const KuanimationScene: React.FC<KuanimationSceneProps> = ({
