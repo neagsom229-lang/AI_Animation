@@ -10,7 +10,7 @@ import { KuanimationScene } from './compositions/KuanimationScene';
 import type { KuanimationSceneProps } from './compositions/KuanimationScene';
 import { Scene10s } from './compositions/Scene10s';
 import { KhmerEmpireExtended, durationInFrames, fps, width, height } from './compositions/KhmerEmpireExtended';
-import { StoryFilm, getStoryDurationInFrames } from './compositions/StoryFilm';
+import { StoryFilm, calculateStoryMetadata } from './compositions/StoryFilm';
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -57,11 +57,11 @@ export const RemotionRoot: React.FC = () => {
         height={height}
       />
 
-      {/* Phase 3 StoryFilm composition driven by story JSON and voice JSON. */}
+      {/* Phase 3 StoryFilm composition driven by story JSON and voice JSON via calculateMetadata. */}
       <Composition
         id="StoryFilm"
         component={StoryFilm}
-        durationInFrames={getStoryDurationInFrames()}
+        calculateMetadata={calculateStoryMetadata}
         fps={30}
         width={1920}
         height={1080}

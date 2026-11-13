@@ -11,7 +11,8 @@
     "remotion:studio": "remotion studio",
     "remotion:render:test": "remotion render DeterminismTest out/determinism-test.mp4",
     "verify:determinism": "node scripts/verify-determinism.mjs",
-    "make": "node scripts/make.mjs"
+    "make": "node scripts/make.mjs",
+    "doctor": "node scripts/doctor.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

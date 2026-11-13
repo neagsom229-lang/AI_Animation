@@ -1,6 +1,6 @@
 /**
  * @fileoverview StoryFilm: Data-driven 3D animation composition that renders any story JSON
- * with dynamic voiceover, lip-sync, subtitles, camera rigs, and moods.
+ * and voiceData via inputProps and calculateMetadata.
  * @module remotion/compositions/StoryFilm
  */
 
@@ -13,23 +13,35 @@ import { getCameraPose, lookAtQuaternion } from '../lib/camera';
 import { AnimaCharacter } from './AnimaCharacter';
 import { DustParticles } from './DustParticles';
 
-import storyData from '../../src/stories/khmer-temple.json';
-import voiceData from '../../public/voice.json';
+export interface StoryFilmProps {
+  story?: any;
+  voiceData?: any;
+}
 
-export const StoryFilm: React.FC = () => {
+export const StoryFilm: React.FC<StoryFilmProps> = ({
+  story,
+  voiceData
+}) => {
   const { fps } = useVideoConfig();
 
-  // Calculate total duration in frames from voiceData
+  if (!story || !voiceData) {
+    return (
+      <AbsoluteFill style={{ backgroundColor: '#111', color: '#fff', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '32px' }}>
+        Loading Story & Voice Data...
+      </AbsoluteFill>
+    );
+  }
+
   let currentFrame = 0;
-  const scenesWithFrames = voiceData.scenes.map((sceneVoice, sIdx) => {
-    const sceneSpec = storyData.scenes[sIdx] || {};
+  const scenesWithFrames = (voiceData.scenes || []).map((sceneVoice: any, sIdx: number) => {
+    const sceneSpec = (story.scenes && story.scenes[sIdx]) || {};
     const durSec = sceneVoice.dur || 5;
     const durFrames = Math.round(durSec * fps);
     const startFrame = currentFrame;
     currentFrame += durFrames;
 
     let lineCurrentFrame = 0;
-    const linesWithFrames = sceneVoice.lines.map((line) => {
+    const linesWithFrames = (sceneVoice.lines || []).map((line: any) => {
       const lineDurFrames = Math.round(line.dur * fps);
       const lStart = lineCurrentFrame;
       lineCurrentFrame += lineDurFrames;
@@ -51,7 +63,7 @@ export const StoryFilm: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      {scenesWithFrames.map((scene, sIdx) => {
+      {scenesWithFrames.map((scene: any, sIdx: number) => {
         const mood = scene.spec.mood || 'warm dawn';
         const rig = scene.spec.camera || 'dolly';
         const preset = resolveMood(mood);
@@ -95,20 +107,13 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   const pose = getCameraPose(rig as any, frame, fps, durationInFrames);
   const cameraRotation = lookAtQuaternion(pose.position, pose.lookAt);
 
-  // Find active dialogue line for lip-sync and subtitles
   let activeLine = scene.lines[0];
-  let lineRelativeFrame = frame;
   for (const line of scene.lines) {
     if (frame >= line.startFrame && frame < line.startFrame + line.durationInFrames) {
       activeLine = line;
-      lineRelativeFrame = frame - line.startFrame;
       break;
     }
   }
-
-  // Compute mouth envelope value from line.env (20Hz sampling)
-  const envIndex = Math.floor((lineRelativeFrame / fps) * 20);
-  const envVal = (activeLine && activeLine.env && activeLine.env[envIndex]) || 0;
 
   return (
     <AbsoluteFill>
@@ -138,7 +143,6 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
           <meshStandardMaterial color="#414c3e" roughness={0.9} />
         </mesh>
 
-        {/* Hero Character */}
         <AnimaCharacter
           position={[0, 0, 0]}
           seed={13}
@@ -151,7 +155,6 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
         <DustParticles count={25} />
       </ThreeCanvas>
 
-      {/* Audio Playback for Dialogue Lines */}
       {scene.lines.map((line: any, lIdx: number) => (
         <Sequence
           key={lIdx}
@@ -162,7 +165,6 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
         </Sequence>
       ))}
 
-      {/* Subtitles Overlay with Khmer Font Support */}
       {activeLine && activeLine.subtitle && (
         <div
           style={{
@@ -189,13 +191,22 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   );
 };
 
-// Calculate total duration in frames for Root registration
-export const getStoryDurationInFrames = () => {
+export const calculateStoryMetadata = ({ props }: { props: Record<string, any> }) => {
+  const voiceData = props?.voiceData;
   let totalSec = 0;
   if (voiceData && voiceData.scenes) {
     for (const sc of voiceData.scenes) {
       totalSec += sc.dur || 5;
     }
+  } else {
+    totalSec = 10;
   }
-  return Math.round(totalSec * 30);
+  const fps = 30;
+  return {
+    durationInFrames: Math.max(30, Math.round(totalSec * fps)),
+    fps,
+    width: 1920,
+    height: 1080,
+    props
+  };
 };
