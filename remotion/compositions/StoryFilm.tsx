@@ -11,6 +11,7 @@ import { PerspectiveCamera } from '@react-three/drei';
 import { resolveMood } from '../../src/render/moods.js';
 import { getCameraPose, lookAtQuaternion } from '../lib/camera.ts';
 import { buildStoryTimeline, type TimedScene, type TimedLine } from '../lib/story-timing.ts';
+import { getSubtitleFont, getSubtitleText } from '../lib/subtitles.ts';
 import { AnimaCharacter } from './AnimaCharacter';
 import { DustParticles } from './DustParticles';
 
@@ -40,6 +41,11 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
   // Timeline is a pure function of voiceData + fps (see remotion/lib/story-timing.ts).
   const timeline = buildStoryTimeline(voiceData, fps);
   const sceneSpecs = story.scenes || [];
+
+  // Subtitle layer is language-aware (--lang): font + text come from the same
+  // resolved narration language that drove the voice.
+  const subtitleLanguage = (voiceData && voiceData.language) || (story && story.language) || 'km';
+  const subtitleFont = getSubtitleFont(subtitleLanguage);
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
@@ -82,6 +88,7 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
               preset={preset}
               rig={rig}
               fps={fps}
+              subtitleFont={subtitleFont}
             />
           </Sequence>
         );
@@ -96,6 +103,7 @@ interface SceneRendererProps {
   preset: any;
   rig: string;
   fps: number;
+  subtitleFont: string;
 }
 
 const SceneRenderer: React.FC<SceneRendererProps> = ({
@@ -103,7 +111,8 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   spec,
   preset,
   rig,
-  fps
+  fps,
+  subtitleFont
 }) => {
   // Frames inside a <Sequence> are LOCAL to that sequence.
   const frame = useCurrentFrame();
@@ -177,31 +186,40 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
         </Sequence>
       ))}
 
-      {activeLine && activeLine.subtitle && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '60px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            color: '#fff',
-            padding: '16px 32px',
-            borderRadius: '8px',
-            fontFamily: '"Hanuman", "Khmer OS Battambang", "Noto Sans Khmer", sans-serif',
-            fontSize: '32px',
-            textAlign: 'center',
-            maxWidth: '80%',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-            border: '1px solid rgba(255,255,255,0.2)'
-          }}
-        >
-          {activeLine.subtitle}
-        </div>
+      {activeLine && (
+        <Subtitle
+          key={`${scene.id}-${activeLine.startFrame}`}
+          text={getSubtitleText(activeLine)}
+          fontFamily={subtitleFont}
+        />
       )}
     </AbsoluteFill>
   );
 };
+
+/** Language-aware caption overlay rendered for the active dialogue line. */
+const Subtitle: React.FC<{ text: string; fontFamily: string }> = ({ text, fontFamily }) => (
+  <div
+    style={{
+      position: 'absolute',
+      bottom: '60px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      backgroundColor: 'rgba(0, 0, 0, 0.75)',
+      color: '#fff',
+      padding: '16px 32px',
+      borderRadius: '8px',
+      fontFamily,
+      fontSize: '32px',
+      textAlign: 'center',
+      maxWidth: '80%',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+      border: '1px solid rgba(255,255,255,0.2)'
+    }}
+  >
+    {text}
+  </div>
+);
 
 export const calculateStoryMetadata = ({ props }: { props: Record<string, any> }) => {
   if (!props || !props.voiceData) {
