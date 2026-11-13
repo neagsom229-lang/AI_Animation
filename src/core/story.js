@@ -5,6 +5,8 @@
 
 'use strict';
 
+import { MoodLightingPresets } from '../render/moods.js';
+
 /**
  * @typedef {Object} Character
  * @property {string} id
@@ -43,10 +45,20 @@
  * @property {Scene[]} scenes
  */
 
+/** Known story vocabulary — unknown values are hard errors (see validateStory). */
+export const KNOWN_ACTIONS = ['idle', 'walk', 'talk', 'turn', 'gesture', 'react'];
+export const KNOWN_CAMERAS = ['dolly', 'orbit', 'crane', 'handheld', 'static'];
+export const KNOWN_LANGUAGES = ['km', 'en'];
+
+/** Moods come from the shared lighting presets (single source of truth). */
+export function knownMoods() {
+  return Object.keys(MoodLightingPresets);
+}
+
 /**
  * Validates a story object against the required schema.
- * @param {Story} story 
- * @throws {Error} if validation fails
+ * Throws an Error with an exact, actionable message on the first violation.
+ * @param {Story} story
  * @returns {boolean} true if valid
  */
 export function validateStory(story) {
@@ -62,6 +74,9 @@ export function validateStory(story) {
   if (typeof story.theme !== 'string') {
     throw new Error('Story missing valid string property: theme');
   }
+  if (story.language !== undefined && !KNOWN_LANGUAGES.includes(story.language)) {
+    throw new Error(`Story language "${story.language}" is unknown. Valid languages: ${KNOWN_LANGUAGES.join(', ')}.`);
+  }
   if (!Array.isArray(story.characters) || story.characters.length === 0) {
     throw new Error('Story must have at least one character in characters array.');
   }
@@ -73,9 +88,47 @@ export function validateStory(story) {
   if (!Array.isArray(story.scenes) || story.scenes.length === 0) {
     throw new Error('Story must have at least one scene in scenes array.');
   }
+  const characterIds = new Set(story.characters.map((c) => c.id));
   for (const [idx, scene] of story.scenes.entries()) {
     if (!scene.id || !scene.name || typeof scene.dur !== 'number' || scene.dur <= 0) {
       throw new Error(`Scene at index ${idx} missing id, name, or valid positive dur.`);
+    }
+    if (scene.mood !== undefined && !knownMoods().includes(scene.mood)) {
+      throw new Error(
+        `Scene "${scene.id}" has unknown mood "${scene.mood}". Valid moods: ${knownMoods().join(', ')}.`
+      );
+    }
+    if (scene.camera !== undefined && !KNOWN_CAMERAS.includes(scene.camera)) {
+      throw new Error(
+        `Scene "${scene.id}" has unknown camera "${scene.camera}". Valid cameras: ${KNOWN_CAMERAS.join(', ')}.`
+      );
+    }
+    for (const [aIdx, actionSpec] of (scene.actions || []).entries()) {
+      if (!actionSpec || !KNOWN_ACTIONS.includes(actionSpec.action)) {
+        throw new Error(
+          `Scene "${scene.id}" has unknown action "${actionSpec && actionSpec.action}". ` +
+          `Valid actions: ${KNOWN_ACTIONS.join(', ')}.`
+        );
+      }
+      if (!actionSpec.character || !characterIds.has(actionSpec.character)) {
+        throw new Error(
+          `Scene "${scene.id}" action at index ${aIdx} references unknown character ` +
+          `"${actionSpec && actionSpec.character}". Known characters: ${[...characterIds].join(', ')}.`
+        );
+      }
+    }
+    for (const [dIdx, dlg] of (scene.dialogue || []).entries()) {
+      if (!dlg || typeof dlg.text !== 'string' || !dlg.text.trim()) {
+        throw new Error(
+          `Scene "${scene.id}" dialogue line at index ${dIdx} has empty or missing text.`
+        );
+      }
+      if (dlg.speaker !== undefined && !characterIds.has(dlg.speaker)) {
+        throw new Error(
+          `Scene "${scene.id}" dialogue line at index ${dIdx} references unknown speaker ` +
+          `"${dlg.speaker}". Known characters: ${[...characterIds].join(', ')}.`
+        );
+      }
     }
   }
   return true;
