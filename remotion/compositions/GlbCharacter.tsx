@@ -95,6 +95,11 @@ export const GlbCharacter: React.FC<GlbCharacterProps> = ({
       if (mesh.isMesh) {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        // Deterministic draw order: characters sort after the ground
+        // (renderOrder 0) so a foot planted exactly on y = 0 can never flip
+        // between runs — three sorts opaque meshes by renderOrder before the
+        // parse-order-dependent material id (see SceneWorld.tsx).
+        mesh.renderOrder = 1;
         // Bind-pose bounding boxes are stale once the mixer animates the
         // mesh — disable culling so limbs never pop out mid-shot.
         mesh.frustumCulled = false;

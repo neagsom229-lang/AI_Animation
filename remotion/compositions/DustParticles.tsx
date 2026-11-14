@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
+import * as THREE from 'three';
 import { makeDust } from '../lib/randomness.ts';
 
 export interface DustParticlesProps {
@@ -30,7 +31,14 @@ export const DustParticles: React.FC<DustParticlesProps> = ({ count = 24 }) => {
         return (
           <mesh key={mote.id} position={[mote.x, y, mote.z]}>
             <sphereGeometry args={[mote.size, 6, 6]} />
-            <meshBasicMaterial color="#fff3c4" transparent opacity={0.55} />
+            {/* Warm, additive sunlit motes instead of flat white dots. */}
+            <meshBasicMaterial
+              color="#ffcf8f"
+              transparent
+              opacity={0.45}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+            />
           </mesh>
         );
       })}

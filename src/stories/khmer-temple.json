@@ -4,6 +4,7 @@
   "theme": "ប្រាសាទថ្ម និង ប្រព័ន្ធធារាសាស្ត្របុរាណ",
   "tone": "inspiring",
   "language": "km",
+  "world": "khmer-temple",
   "characters": [
     { "id": "reach", "name": "បុត្រា រាជ", "role": "ជាងចម្លាក់", "modelUrl": "public/models/characters/casual_male.glb" },
     { "id": "minea", "name": "នាង មីនា", "role": "អ្នកស្រាវជ្រាវ", "modelUrl": "public/models/characters/casual_female.glb" }

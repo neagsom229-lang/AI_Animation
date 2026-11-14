@@ -75,6 +75,19 @@ function collectReferences() {
 
 const creditsText = existsSync(CREDITS) ? readFileSync(CREDITS, 'utf8') : '';
 
+/**
+ * Resolve a referenced asset to an absolute path.
+ *
+ * Two conventions exist in the repo and both are valid:
+ *  - story `modelUrl` values are repo-root relative: "public/models/…"
+ *  - `staticFile()` literals are public-dir relative: "textures/…"
+ * Anything not already rooted at `public/` is resolved inside `public/`.
+ */
+function resolveRef(value) {
+  const rel = value.startsWith('public/') ? value : `public/${value}`;
+  return path.join(ROOT, rel);
+}
+
 test('CREDITS.md exists at the repo root', () => {
   assert.ok(existsSync(CREDITS), 'CREDITS.md is missing');
   assert.ok(creditsText.length > 500, 'CREDITS.md looks empty');
@@ -84,8 +97,7 @@ test('every model/texture referenced by stories or compositions exists on disk',
   const refs = collectReferences();
   assert.ok(refs.length > 0, 'no model/texture references found in stories or sources');
   for (const { value, origin } of refs) {
-    const rel = value.replace(/^public\//, 'public/');
-    const abs = path.join(ROOT, rel);
+    const abs = resolveRef(value);
     assert.ok(existsSync(abs), `referenced asset "${value}" (${origin}) does not exist at ${abs}`);
   }
 });
@@ -106,8 +118,7 @@ test('every referenced model stays under 5 MB', () => {
   const refs = collectReferences().filter(({ value }) => /\.(glb|gltf)$/i.test(value));
   assert.ok(refs.length > 0, 'no model references found');
   for (const { value, origin } of refs) {
-    const abs = path.join(ROOT, value.replace(/^public\//, 'public/'));
-    const size = statSync(abs).size;
+    const size = statSync(resolveRef(value)).size;
     assert.ok(
       size < 5 * 1024 * 1024,
       `model "${value}" (${origin}) is ${(size / 1024 / 1024).toFixed(2)} MB (limit 5 MB)`
@@ -118,8 +129,7 @@ test('every referenced model stays under 5 MB', () => {
 test('every referenced standalone texture is <= 2048 px per side', () => {
   const refs = collectReferences().filter(({ value }) => /\.(jpg|jpeg|png)$/i.test(value));
   for (const { value, origin } of refs) {
-    const abs = path.join(ROOT, value.replace(/^public\//, 'public/'));
-    const buf = readFileSync(abs);
+    const buf = readFileSync(resolveRef(value));
     let dims = null;
     if (/\.png$/i.test(value) && buf.length > 24) {
       dims = [buf.readUInt32BE(16), buf.readUInt32BE(20)];

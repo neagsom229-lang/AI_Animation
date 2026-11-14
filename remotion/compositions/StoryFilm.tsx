@@ -8,12 +8,14 @@ import React from 'react';
 import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig, Audio, staticFile } from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
 import { PerspectiveCamera } from '@react-three/drei';
+import * as THREE from 'three';
 import { resolveMood } from '../../src/render/moods.js';
 import { getCameraPose, lookAtQuaternion } from '../lib/camera.ts';
 import { buildStoryTimeline, type TimedScene, type TimedLine } from '../lib/story-timing.ts';
 import { getSubtitleFont, getSubtitleText } from '../lib/subtitles.ts';
 import { AnimaCharacter } from './AnimaCharacter';
 import { GlbCharacter } from './GlbCharacter';
+import { SceneWorld } from './SceneWorld';
 import { DustParticles } from './DustParticles';
 
 export interface StoryFilmProps {
@@ -91,10 +93,22 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
               fps={fps}
               subtitleFont={subtitleFont}
               characters={story.characters || []}
+              world={story.world}
             />
           </Sequence>
         );
       })}
+
+      {/* Cinematic vignette: darkens the corners of every shot (above the 3D
+          layer, below the subtitles). */}
+      <AbsoluteFill
+        style={{
+          pointerEvents: 'none',
+          zIndex: 10,
+          background:
+            'radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.38) 100%)'
+        }}
+      />
     </AbsoluteFill>
   );
 };
@@ -107,6 +121,8 @@ interface SceneRendererProps {
   fps: number;
   subtitleFont: string;
   characters: any[];
+  /** Optional world name from the story JSON (e.g. "khmer-temple"). */
+  world?: string;
 }
 
 const SceneRenderer: React.FC<SceneRendererProps> = ({
@@ -116,7 +132,8 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   rig,
   fps,
   subtitleFont,
-  characters
+  characters,
+  world
 }) => {
   // Frames inside a <Sequence> are LOCAL to that sequence.
   const frame = useCurrentFrame();
@@ -156,17 +173,35 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
 
   return (
     <AbsoluteFill>
-      <ThreeCanvas width={1920} height={1080}>
-        <color attach="background" args={[preset.fog]} />
-        <fogExp2 attach="fog" args={[preset.fog, 0.015]} />
+      <ThreeCanvas
+        width={1920}
+        height={1080}
+        shadows
+        gl={{ toneMapping: THREE.ACESFilmicToneMapping, outputColorSpace: THREE.SRGBColorSpace }}
+      >
+        {world ? (
+          // Phase C: fully dressed world (HDRI sky, sun + shadows, PBR ground,
+          // temple, pond, seeded scatter) — it owns fog and the lights.
+          <SceneWorld preset={preset} world={world} />
+        ) : (
+          <>
+            <color attach="background" args={[preset.fog]} />
+            <fogExp2 attach="fog" args={[preset.fog, 0.015]} />
 
-        <ambientLight color={preset.ambient} intensity={preset.intensity} />
-        <directionalLight
-          color={preset.directional}
-          intensity={preset.intensity * 1.2}
-          position={[10, 20, 10]}
-          castShadow
-        />
+            <ambientLight color={preset.ambient} intensity={preset.intensity} />
+            <directionalLight
+              color={preset.directional}
+              intensity={preset.intensity * 1.2}
+              position={[10, 20, 10]}
+              castShadow
+            />
+
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <planeGeometry args={[100, 100]} />
+              <meshStandardMaterial color="#414c3e" roughness={0.9} />
+            </mesh>
+          </>
+        )}
 
         <PerspectiveCamera
           makeDefault
@@ -176,11 +211,6 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
           position={pose.position}
           quaternion={cameraRotation}
         />
-
-        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[100, 100]} />
-          <meshStandardMaterial color="#414c3e" roughness={0.9} />
-        </mesh>
 
         {charUrl ? (
           <GlbCharacter
@@ -234,6 +264,7 @@ const Subtitle: React.FC<{ text: string; fontFamily: string }> = ({ text, fontFa
   <div
     style={{
       position: 'absolute',
+      zIndex: 20,
       bottom: '60px',
       left: '50%',
       transform: 'translateX(-50%)',
