@@ -17,10 +17,18 @@ export const MoodLightingPresets = {
 };
 
 /**
- * Resolve a mood by name, falling back to 'warm dawn'.
+ * Resolve a mood by name.
  * @param {string} moodName
  * @returns {{ ambient: number, directional: number, fog: number, intensity: number }}
+ * @throws {Error} When moodName is not a known preset. There is deliberately no
+ *   silent fallback: an unknown mood must fail loudly (with the valid list in
+ *   the message) instead of quietly rendering 'warm dawn'.
  */
 export function resolveMood(moodName) {
-  return MoodLightingPresets[moodName] || MoodLightingPresets['warm dawn'];
+  if (!Object.hasOwn(MoodLightingPresets, moodName)) {
+    throw new Error(
+      `unknown mood "${moodName}". Valid moods: ${Object.keys(MoodLightingPresets).join(', ')}.`
+    );
+  }
+  return MoodLightingPresets[moodName];
 }

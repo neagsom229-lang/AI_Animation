@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { validateStory, generateStory } from '../src/core/story.js';
 import { TimelineScheduler, keyframes, Easing } from '../src/core/engine.js';
+import { resolveMood, MoodLightingPresets } from '../src/render/moods.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -50,6 +51,21 @@ test('validateStory rejects unknown mood with the valid list in the message', ()
   assert.throws(() => validateStory(story), (err) => {
     return /unknown mood "sunset"/.test(err.message) && err.message.includes('warm dawn');
   });
+});
+
+test('resolveMood returns the exact preset for every known mood', () => {
+  for (const name of Object.keys(MoodLightingPresets)) {
+    assert.strictEqual(resolveMood(name), MoodLightingPresets[name]);
+  }
+});
+
+test('resolveMood throws on unknown moods (no silent warm-dawn fallback)', () => {
+  assert.throws(() => resolveMood('sunset'), (err) => {
+    return /unknown mood "sunset"/.test(err.message) && err.message.includes('warm dawn');
+  });
+  assert.throws(() => resolveMood('constructor'), /unknown mood "constructor"/);
+  assert.throws(() => resolveMood(undefined), /unknown mood/);
+  assert.throws(() => resolveMood(''), /unknown mood ""/);
 });
 
 test('validateStory rejects unknown action and unknown action character', () => {

@@ -80,10 +80,12 @@ export class TimelineScheduler {
   play() {
     if (this.playing) return;
     this.playing = true;
-    this._lastTimestamp = performance.now();
+    // Wall-clock-free: derive dt purely from successive requestAnimationFrame
+    // timestamps (the first frame seeds the baseline, so dt starts at 0).
+    this._lastTimestamp = null;
     const tick = (now) => {
       if (!this.playing) return;
-      const dt = (now - this._lastTimestamp) / 1000;
+      const dt = (now - (this._lastTimestamp ?? now)) / 1000;
       this._lastTimestamp = now;
       this.seek(this.currentTime + dt * this.speed);
       if (this.currentTime >= this.duration) {

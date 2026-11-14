@@ -5,7 +5,8 @@
  *  1. `useFrame` from @react-three/fiber is never used inside the Remotion
  *     project (wall-clock dependency → frame drift).
  *  2. `Math.random()`, `THREE.Clock`, `performance.now`, `Date.now` never
- *     appear in Remotion sources.
+ *     appear in Remotion sources **or** in src/ (the shared renderer/engine
+ *     used by the legacy studio and imported by the Remotion compositions).
  *  3. Animated components derive state from `useCurrentFrame()`.
  *  4. Every `<ThreeCanvas>` sets explicit `width` and `height`.
  *  5. Camera rigs and seeded randomness are *pure functions of the frame*:
@@ -22,6 +23,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REMOTION_DIR = fileURLToPath(new URL('../remotion', import.meta.url));
+const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
 
 /**
  * Remove comments so the static rules ban *usage*, not documentation
@@ -86,19 +88,24 @@ function listSources(dir) {
   return out;
 }
 
-const sources = listSources(REMOTION_DIR);
+const remotionSources = listSources(REMOTION_DIR);
+const srcSources = listSources(SRC_DIR);
+// The static RULE tests below scan both trees: the Remotion project and src/
+// (the shared renderer/engine that the compositions import from).
+const sources = [...remotionSources, ...srcSources];
 const codes = new Map(sources.map((file) => [file, codeOf(file)]));
 
-test('remotion project contains TypeScript sources', () => {
-  assert.ok(sources.length >= 8, `expected >= 8 sources, found ${sources.length}`);
+test('project contains TypeScript sources in remotion/ and src/', () => {
+  assert.ok(remotionSources.length >= 8, `expected >= 8 remotion sources, found ${remotionSources.length}`);
+  assert.ok(srcSources.length >= 5, `expected >= 5 src/ sources, found ${srcSources.length}`);
 });
 
-test('RULE: useFrame from @react-three/fiber never appears in Remotion sources', () => {
+test('RULE: useFrame from @react-three/fiber never appears in Remotion or src sources', () => {
   const offenders = sources.filter((file) => /\buseFrame\b/.test(codes.get(file)));
   assert.deepEqual(offenders, [], `wall-clock useFrame found in: ${offenders.join(', ')}`);
 });
 
-test('RULE: Math.random() never appears in Remotion sources', () => {
+test('RULE: Math.random() never appears in Remotion or src sources', () => {
   const offenders = sources.filter((file) => /Math\.random\s*\(/.test(codes.get(file)));
   assert.deepEqual(offenders, [], `unseeded randomness found in: ${offenders.join(', ')}`);
 });

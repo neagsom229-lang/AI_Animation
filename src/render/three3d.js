@@ -62,7 +62,11 @@ export class ThreeSceneManager {
 
     this.proceduralObjects = [];
     this.loadedCharacters = [];
-    this.clock = new THREE.Clock();
+    // Frame-driven clock: time is a pure function of the frame index, never a
+    // wall clock. One update() == one frame; elapsedTime accumulates the
+    // caller-supplied frame delta (see update()).
+    this.frameIndex = 0;
+    this.elapsedTime = 0;
 
     // Post-processing setup
     this.composer = null;
@@ -283,7 +287,11 @@ export class ThreeSceneManager {
   }
 
   update(deltaTime = 0.016, audioAmplitude = 0) {
-    const time = this.clock.getElapsedTime();
+    // Advance the frame index and derive time from it: deterministic given the
+    // sequence of frame deltas (no THREE.Clock / getElapsedTime wall clock).
+    this.frameIndex += 1;
+    this.elapsedTime += deltaTime;
+    const time = this.elapsedTime;
 
     for (const char of this.loadedCharacters) {
       if (char.mixer) {
