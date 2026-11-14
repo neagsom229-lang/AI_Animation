@@ -24,6 +24,10 @@ __pycache__/
 out/
 **/audio/batch-*.wav
 
+# Raw asset staging (downloads/extracted kits; provenance in CREDITS.md,
+# shipped processed files live in public/)
+assets-src/
+
 # Generated voice data + audio + subtitles (regenerated via `node scripts/make.mjs`)
 public/voice/
 public/voice.json

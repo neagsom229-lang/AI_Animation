@@ -5,8 +5,8 @@
   "tone": "inspiring",
   "language": "km",
   "characters": [
-    { "id": "reach", "name": "បុត្រា រាជ", "role": "ជាងចម្លាក់" },
-    { "id": "minea", "name": "នាង មីនា", "role": "អ្នកស្រាវជ្រាវ" }
+    { "id": "reach", "name": "បុត្រា រាជ", "role": "ជាងចម្លាក់", "modelUrl": "public/models/characters/casual_male.glb" },
+    { "id": "minea", "name": "នាង មីនា", "role": "អ្នកស្រាវជ្រាវ", "modelUrl": "public/models/characters/casual_female.glb" }
   ],
   "scenes": [
     {

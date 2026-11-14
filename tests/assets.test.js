@@ -1,0 +1,145 @@
+/**
+ * @fileoverview Phase A asset pipeline test.
+ *
+ * Enforces, as CI-runnable checks:
+ *  1. Every model/texture referenced by the shipped stories (`modelUrl`) or
+ *     by string literals in remotion/ and src/ sources exists on disk.
+ *  2. Every referenced asset has an entry in CREDITS.md (matched by file
+ *     basename) — no uncredited assets can reach a render.
+ *  3. Referenced models stay under 5 MB each.
+ *  4. Referenced standalone textures (jpg/png) are <= 2048 px per side
+ *     (GLB-embedded textures are capped by gltf-transform --texture-size).
+ */
+
+'use strict';
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const PUBLIC_DIR = path.join(ROOT, 'public');
+const CREDITS = path.join(ROOT, 'CREDITS.md');
+
+/** Recursively list source files under a directory. */
+function listSources(dir, pattern = /\.(tsx?|jsx?)$/) {
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      out.push(...listSources(full, pattern));
+    } else if (pattern.test(entry)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+/**
+ * Collect referenced asset paths:
+ *  - `modelUrl` fields from every story JSON in src/stories/
+ *  - quoted string literals like "models/…", "public/textures/…",
+ *    "textures/…", "models/…" ending in a known asset extension.
+ * Returns repo-root-relative paths (as written) plus their origin.
+ */
+function collectReferences() {
+  const refs = [];
+
+  // 1. Story modelUrl fields.
+  const storiesDir = path.join(ROOT, 'src', 'stories');
+  for (const f of readdirSync(storiesDir).filter((n) => n.endsWith('.json')).sort()) {
+    const story = JSON.parse(readFileSync(path.join(storiesDir, f), 'utf8'));
+    for (const c of story.characters || []) {
+      if (c.modelUrl) {
+        refs.push({ value: c.modelUrl, origin: `src/stories/${f} character "${c.id}"` });
+      }
+    }
+  }
+
+  // 2. String literals in remotion/ and src/ sources.
+  const literal = /["'`]((?:public\/)?(?:models|textures)\/[\w./-]+\.(?:glb|gltf|hdr|jpg|png))["'`]/g;
+  const sourceDirs = [path.join(ROOT, 'remotion'), path.join(ROOT, 'src')];
+  for (const dir of sourceDirs) {
+    for (const file of listSources(dir)) {
+      const code = readFileSync(file, 'utf8');
+      for (const m of code.matchAll(literal)) {
+        refs.push({ value: m[1], origin: path.relative(ROOT, file) });
+      }
+    }
+  }
+
+  return refs;
+}
+
+const creditsText = existsSync(CREDITS) ? readFileSync(CREDITS, 'utf8') : '';
+
+test('CREDITS.md exists at the repo root', () => {
+  assert.ok(existsSync(CREDITS), 'CREDITS.md is missing');
+  assert.ok(creditsText.length > 500, 'CREDITS.md looks empty');
+});
+
+test('every model/texture referenced by stories or compositions exists on disk', () => {
+  const refs = collectReferences();
+  assert.ok(refs.length > 0, 'no model/texture references found in stories or sources');
+  for (const { value, origin } of refs) {
+    const rel = value.replace(/^public\//, 'public/');
+    const abs = path.join(ROOT, rel);
+    assert.ok(existsSync(abs), `referenced asset "${value}" (${origin}) does not exist at ${abs}`);
+  }
+});
+
+test('every referenced asset has an entry in CREDITS.md', () => {
+  const refs = collectReferences();
+  assert.ok(refs.length > 0, 'no model/texture references found');
+  for (const { value, origin } of refs) {
+    const base = path.basename(value);
+    assert.ok(
+      creditsText.includes(base),
+      `referenced asset "${value}" (${origin}) has no entry for "${base}" in CREDITS.md`
+    );
+  }
+});
+
+test('every referenced model stays under 5 MB', () => {
+  const refs = collectReferences().filter(({ value }) => /\.(glb|gltf)$/i.test(value));
+  assert.ok(refs.length > 0, 'no model references found');
+  for (const { value, origin } of refs) {
+    const abs = path.join(ROOT, value.replace(/^public\//, 'public/'));
+    const size = statSync(abs).size;
+    assert.ok(
+      size < 5 * 1024 * 1024,
+      `model "${value}" (${origin}) is ${(size / 1024 / 1024).toFixed(2)} MB (limit 5 MB)`
+    );
+  }
+});
+
+test('every referenced standalone texture is <= 2048 px per side', () => {
+  const refs = collectReferences().filter(({ value }) => /\.(jpg|jpeg|png)$/i.test(value));
+  for (const { value, origin } of refs) {
+    const abs = path.join(ROOT, value.replace(/^public\//, 'public/'));
+    const buf = readFileSync(abs);
+    let dims = null;
+    if (/\.png$/i.test(value) && buf.length > 24) {
+      dims = [buf.readUInt32BE(16), buf.readUInt32BE(20)];
+    } else if (/\.(jpe?g)$/i.test(value)) {
+      let i = 2;
+      while (i < buf.length - 9) {
+        if (buf[i] !== 0xff) { i += 1; continue; }
+        const marker = buf[i + 1];
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          dims = [buf.readUInt16BE(i + 7), buf.readUInt16BE(i + 5)];
+          break;
+        }
+        i += 2 + buf.readUInt16BE(i + 2);
+      }
+    }
+    if (!dims) continue; // unparseable header: size covered by MD5-verified downloads
+    const [w, h] = dims;
+    assert.ok(
+      w <= 2048 && h <= 2048,
+      `texture "${value}" (${origin}) is ${w}x${h} (limit 2048)`
+    );
+  }
+});

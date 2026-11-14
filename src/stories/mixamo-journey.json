@@ -9,7 +9,7 @@
       "id": "hero",
       "name": "Explorer Alex",
       "role": "Protagonist",
-      "modelUrl": "public/models/character_idle_walk_talk.glb"
+      "modelUrl": "public/models/characters/casual_male.glb"
     }
   ],
   "scenes": [
