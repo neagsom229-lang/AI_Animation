@@ -21,6 +21,32 @@ export const SUBTITLE_FONTS: Record<string, string> = {
 export const DEFAULT_SUBTITLE_LANGUAGE = 'km';
 
 /**
+ * Title-safe subtitle geometry for the 1920×1080 film frame.
+ *
+ *  - `bottomPx` keeps the caption box at least 54 px (5% of 1080) clear of
+ *    the bottom edge — the box's padding sits inside the box, so the visible
+ *    text never leaves the title-safe area.
+ *  - `maxWidthPercent` caps the box at 80% of the width, leaving 192 px per
+ *    side — double the 96 px (5% of 1920) title-safe margin.
+ *  - `lineHeight` leaves headroom for Khmer ascenders/descenders (សំពះ ស្រុះ ស្រួល)
+ *    so two-line captions do not collide or clip.
+ *
+ * tests/subtitle.test.js enforces the 5% rules against these constants, and
+ * StoryFilm's <Subtitle> must consume them (grep-guarded).
+ */
+export const SUBTITLE_LAYOUT = {
+  bottomPx: 60,
+  maxWidthPercent: 80,
+  fontSizePx: 32,
+  paddingXPx: 32,
+  paddingYPx: 16,
+  lineHeight: 1.5
+} as const;
+
+/** Title-safe margin as a fraction of the frame (5% on every edge). */
+export const TITLE_SAFE_FRACTION = 0.05;
+
+/**
  * Resolve the subtitle font for a narration language.
  * Fails loudly on unknown languages (no silent fallback).
  */

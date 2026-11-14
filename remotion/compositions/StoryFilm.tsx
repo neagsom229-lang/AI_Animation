@@ -5,14 +5,33 @@
  */
 
 import React from 'react';
-import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig, Audio, staticFile } from 'remotion';
+import {
+  AbsoluteFill,
+  Sequence,
+  useCurrentFrame,
+  useVideoConfig,
+  Audio,
+  staticFile,
+  delayRender,
+  continueRender
+} from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
 import { PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { resolveMood } from '../../src/render/moods.js';
-import { getCameraPose, lookAtQuaternion } from '../lib/camera.ts';
+import {
+  getCameraPose,
+  getShotPose,
+  lookAtQuaternion,
+  SPEAKER_POSITION,
+  SPEAKER_YAW,
+  LISTENER_POSITION,
+  LISTENER_YAW,
+  type CameraRigType,
+  type ShotType
+} from '../lib/camera.ts';
 import { buildStoryTimeline, type TimedScene, type TimedLine } from '../lib/story-timing.ts';
-import { getSubtitleFont, getSubtitleText } from '../lib/subtitles.ts';
+import { getSubtitleFont, getSubtitleText, SUBTITLE_LAYOUT } from '../lib/subtitles.ts';
 import { AnimaCharacter } from './AnimaCharacter';
 import { GlbCharacter } from './GlbCharacter';
 import { SceneWorld } from './SceneWorld';
@@ -31,6 +50,25 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
   isMock
 }) => {
   const { fps } = useVideoConfig();
+
+  // Khmer captions need a font that a fresh clone may not have installed, so
+  // the film ships Hanuman itself (public/fonts — SIL OFL 1.1, CREDITS.md).
+  // Hold the render until it is decoded: capturing mid-load would render a
+  // fallback typeface, which is both wrong-looking and non-deterministic.
+  const [fontHandle] = React.useState(() =>
+    delayRender('Loading Hanuman subtitle font')
+  );
+  React.useEffect(() => {
+    const finish = () => continueRender(fontHandle);
+    if (!document.fonts || !document.fonts.load) {
+      finish();
+      return;
+    }
+    Promise.all([
+      document.fonts.load(`400 ${SUBTITLE_LAYOUT.fontSizePx}px Hanuman`),
+      document.fonts.load(`700 ${SUBTITLE_LAYOUT.fontSizePx}px Hanuman`)
+    ]).then(finish, finish);
+  }, [fontHandle]);
 
   if (!story || !voiceData) {
     return (
@@ -52,6 +90,30 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
+      {/* @font-face for the bundled Khmer caption font (Hanuman, SIL OFL 1.1
+          — downloaded from Google Fonts, see CREDITS.md). font-display:block
+          plus the delayRender gate above keeps captions out of fallback
+          typefaces. */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+@font-face {
+  font-family: 'Hanuman';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('${staticFile('fonts/Hanuman-Regular.ttf')}') format('truetype');
+}
+@font-face {
+  font-family: 'Hanuman';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('${staticFile('fonts/Hanuman-Bold.ttf')}') format('truetype');
+}
+`
+        }}
+      />
       {isMock && (
         <div
           style={{
@@ -138,7 +200,11 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   // Frames inside a <Sequence> are LOCAL to that sequence.
   const frame = useCurrentFrame();
   const durationInFrames = scene.durationInFrames;
-  const pose = getCameraPose(rig as any, frame, fps, durationInFrames);
+  // A scene may declare a shot (close-up | medium | wide | over-shoulder);
+  // without one it falls back to the legacy rig framing.
+  const pose = spec.shot
+    ? getShotPose(spec.shot as ShotType, rig as CameraRigType, frame, fps, durationInFrames)
+    : getCameraPose(rig as any, frame, fps, durationInFrames);
   const cameraRotation = lookAtQuaternion(pose.position, pose.lookAt);
 
   // Convert absolute line frames to sequence-local frames.
@@ -170,6 +236,12 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   ).action;
   const charAction = sceneAction || (activeLine ? 'talk' : 'idle');
   const charUrl = charSpec && charSpec.modelUrl;
+  // Conversation blocking: when the story has a second character they stand
+  // on the listener mark facing the speaker (camera.ts owns the layout), so
+  // two-person shots — especially over-the-shoulder — have someone to frame.
+  const listenerSpec = characters.find((c: any) => c.id !== (charSpec && charSpec.id));
+  const listenerUrl = listenerSpec && listenerSpec.modelUrl;
+  const hasListener = Boolean(listenerUrl);
 
   return (
     <AbsoluteFill>
@@ -213,13 +285,26 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
         />
 
         {charUrl ? (
-          <GlbCharacter
-            modelUrl={charUrl}
-            position={[0, 0, 0]}
-            action={charAction}
-            env={activeLine ? activeLine.env : undefined}
-            lineStartFrame={activeLine ? activeLine.localStart : 0}
-          />
+          <>
+            <GlbCharacter
+              modelUrl={charUrl}
+              position={SPEAKER_POSITION}
+              // Face the listener mark for a real conversation; a solo
+              // character keeps facing the camera.
+              rotationY={hasListener ? SPEAKER_YAW : 0}
+              action={charAction}
+              env={activeLine ? activeLine.env : undefined}
+              lineStartFrame={activeLine ? activeLine.localStart : 0}
+            />
+            {hasListener && (
+              <GlbCharacter
+                modelUrl={listenerUrl}
+                position={LISTENER_POSITION}
+                rotationY={LISTENER_YAW}
+                action="idle"
+              />
+            )}
+          </>
         ) : (
           // Legacy fallback for stories without a character modelUrl:
           // the procedural anima3d rig (still frame-deterministic).
@@ -259,23 +344,26 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   );
 };
 
-/** Language-aware caption overlay rendered for the active dialogue line. */
+/** Language-aware caption overlay rendered for the active dialogue line.
+ *  Geometry comes from SUBTITLE_LAYOUT so the box stays inside the
+ *  title-safe area (tests/subtitle.test.js enforces the 5% rules). */
 const Subtitle: React.FC<{ text: string; fontFamily: string }> = ({ text, fontFamily }) => (
   <div
     style={{
       position: 'absolute',
       zIndex: 20,
-      bottom: '60px',
+      bottom: `${SUBTITLE_LAYOUT.bottomPx}px`,
       left: '50%',
       transform: 'translateX(-50%)',
       backgroundColor: 'rgba(0, 0, 0, 0.75)',
       color: '#fff',
-      padding: '16px 32px',
+      padding: `${SUBTITLE_LAYOUT.paddingYPx}px ${SUBTITLE_LAYOUT.paddingXPx}px`,
       borderRadius: '8px',
       fontFamily,
-      fontSize: '32px',
+      fontSize: `${SUBTITLE_LAYOUT.fontSizePx}px`,
+      lineHeight: SUBTITLE_LAYOUT.lineHeight,
       textAlign: 'center',
-      maxWidth: '80%',
+      maxWidth: `${SUBTITLE_LAYOUT.maxWidthPercent}%`,
       boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
       border: '1px solid rgba(255,255,255,0.2)'
     }}

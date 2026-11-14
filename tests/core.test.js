@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert';
-import { validateStory, generateStory } from '../src/core/story.js';
+import { validateStory, generateStory, KNOWN_SHOTS } from '../src/core/story.js';
 import { TimelineScheduler, keyframes, Easing } from '../src/core/engine.js';
 import { resolveMood, MoodLightingPresets } from '../src/render/moods.js';
 import fs from 'node:fs';
@@ -99,6 +99,59 @@ test('validateStory rejects unknown language', () => {
     scenes: [{ id: 's1', name: 'S', dur: 3 }]
   };
   assert.throws(() => validateStory(story), (err) => /language "fr" is unknown/.test(err.message) && err.message.includes('km, en'));
+});
+
+test('validateStory rejects unknown shot with the valid list in the message', () => {
+  const story = {
+    title: 'T', genre: 'g', theme: 'th', language: 'en',
+    characters: [{ id: 'n', name: 'N' }],
+    scenes: [{ id: 's1', name: 'S', dur: 3, shot: 'extreme-wide' }]
+  };
+  assert.throws(() => validateStory(story), (err) => {
+    return /unknown shot "extreme-wide"/.test(err.message) &&
+      err.message.includes('close-up, medium, wide, over-shoulder');
+  });
+});
+
+test('validateStory requires a second modelled character for over-shoulder', () => {
+  const solo = {
+    title: 'T', genre: 'g', theme: 'th', language: 'en',
+    characters: [{ id: 'a', name: 'A', modelUrl: 'public/models/characters/casual_male.glb' }],
+    scenes: [{ id: 's1', name: 'S', dur: 3, shot: 'over-shoulder' }]
+  };
+  assert.throws(() => validateStory(solo), (err) => {
+    return /over-shoulder/.test(err.message) && err.message.includes('second 3D character');
+  });
+  // Two characters WITHOUT modelUrl still cannot stage it (nothing to render).
+  const noModels = {
+    ...solo,
+    characters: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }]
+  };
+  assert.throws(() => validateStory(noModels), /only 0 character\(s\) declare modelUrl/);
+  // Two modelled characters → valid.
+  const duo = {
+    ...solo,
+    characters: [
+      { id: 'a', name: 'A', modelUrl: 'public/models/characters/casual_male.glb' },
+      { id: 'b', name: 'B', modelUrl: 'public/models/characters/casual_female.glb' }
+    ]
+  };
+  assert.strictEqual(validateStory(duo), true);
+});
+
+test('every shipped story validates, including its shot vocabulary', () => {
+  const storiesDir = path.resolve('src', 'stories');
+  const files = fs.readdirSync(storiesDir).filter((f) => f.endsWith('.json')).sort();
+  assert.ok(files.length > 0, 'no story JSON files found in src/stories');
+  for (const f of files) {
+    const story = JSON.parse(fs.readFileSync(path.join(storiesDir, f), 'utf8'));
+    assert.strictEqual(validateStory(story), true, `${f} failed validation`);
+    for (const scene of story.scenes) {
+      if (scene.shot !== undefined) {
+        assert.ok(KNOWN_SHOTS.includes(scene.shot), `${f}: unknown shot "${scene.shot}"`);
+      }
+    }
+  }
 });
 
 test('generateStory offline fallback produces valid story', async () => {

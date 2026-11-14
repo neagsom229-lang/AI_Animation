@@ -59,7 +59,7 @@ function collectReferences() {
   }
 
   // 2. String literals in remotion/ and src/ sources.
-  const literal = /["'`]((?:public\/)?(?:models|textures)\/[\w./-]+\.(?:glb|gltf|hdr|jpg|png))["'`]/g;
+  const literal = /["'`]((?:public\/)?(?:models|textures|fonts)\/[\w./-]+\.(?:glb|gltf|hdr|jpg|png|ttf|otf|woff2?))["'`]/g;
   const sourceDirs = [path.join(ROOT, 'remotion'), path.join(ROOT, 'src')];
   for (const dir of sourceDirs) {
     for (const file of listSources(dir)) {

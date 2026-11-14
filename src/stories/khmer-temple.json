@@ -16,7 +16,11 @@
       "mood": "warm dawn",
       "dur": 6,
       "camera": "dolly",
+      "shot": "wide",
       "renderer": "2d",
+      "actions": [
+        { "character": "minea", "action": "talk" }
+      ],
       "dialogue": [
         { "speaker": "minea", "text": "ពន្លឺថ្ងៃដំបូងជះលើកំពូលប្រាសាទ បង្ហាញពីស្ថាបត្យកម្មដ៏អស្ចារ្យ។", "subtitle": "First light over temple spires." }
       ]
@@ -27,7 +31,11 @@
       "mood": "gold dust",
       "dur": 8,
       "camera": "orbit",
+      "shot": "medium",
       "renderer": "3d",
+      "actions": [
+        { "character": "reach", "action": "talk" }
+      ],
       "dialogue": [
         { "speaker": "reach", "text": "ទឹកគឺជីវិតនៃអាណាចក្រ យើងជីកបារាយណ៍ដើម្បីទ្រទ្រង់ដំណាំ។", "subtitle": "Water is life for the empire." }
       ]

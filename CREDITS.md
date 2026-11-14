@@ -2,9 +2,9 @@
 
 Every file listed here was **actually downloaded** by the Kuanimation asset
 pipeline on **2026-11-14** from the official source named below. Nothing in
-`public/models/` or `public/textures/` is credited from memory or guesswork:
-each entry records the pack name, the real URL that returned the file, the
-license as stated on the source, and the download date.
+`public/models/`, `public/textures/` or `public/fonts/` is credited from memory
+or guesswork: each entry records the pack name, the real URL that returned the
+file, the license as stated on the source, and the download date.
 
 - Poly Haven downloads were verified against the `md5` returned by
   `https://api.polyhaven.com/files/<id>` (all 7 files match).
@@ -104,6 +104,16 @@ Files used: `kenney-castle-stairs-stone.glb`, `kenney-castle-wall.glb`,
 | `old_stone_wall_diff_1k.jpg` | 880,453 B | `6cc7415f446cd7a04d86461ddbac0a28` ✓ |
 | `old_stone_wall_nor_gl_1k.jpg` | 1,186,893 B | `e4f02b4c5956e69719d2dafa002085e5` ✓ |
 | `old_stone_wall_rough_1k.jpg` | 233,946 B | `f707aa4f2052cd6e8523937f85700d88` ✓ |
+
+## 7. Hanuman — Khmer caption font (SIL OFL 1.1)
+
+| Field | Value |
+|---|---|
+| Font | Hanuman (Khmer + Latin), weights 400 and 700 |
+| Source | Google Fonts official CSS API `https://fonts.googleapis.com/css2?family=Hanuman:wght@400;700`, which returned the exact `fonts.gstatic.com` TTF URLs used (no URL was guessed) |
+| License | **SIL Open Font License 1.1** — verified from the official repo copy `https://raw.githubusercontent.com/google/fonts/main/ofl/hanuman/OFL.txt`: "Copyright 2019 The Hanuman Project Authors … This Font Software is licensed under the SIL Open Font License, Version 1.1." The OFL explicitly permits bundling/redistribution with software. |
+| Downloaded | `Hanuman-Regular.ttf` (57,404 B), `Hanuman-Bold.ttf` (57,584 B) — 2026-11-14; TrueType magic bytes `00 01 00 00` verified on both |
+| Used as | `public/fonts/Hanuman-Regular.ttf`, `public/fonts/Hanuman-Bold.ttf` — first face of the `km` subtitle stack (`remotion/lib/subtitles.ts`), registered via `@font-face` and gated with `delayRender` in StoryFilm so captions never capture in a fallback typeface |
 
 ---
 

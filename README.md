@@ -55,8 +55,10 @@ and is never reused for real generation.
 
 Required: `title`, `genre`, `theme`, `characters[]` (≥1), `scenes[]` (≥1).
 Each scene requires `id`, `name`, positive numeric `dur`, and `dialogue[]`; each
-line requires non-empty `text`. Optional per scene: `mood`, `camera`, `renderer`,
-`actions`.
+line requires non-empty `text`. Optional per scene: `mood`, `camera`, `shot`,
+`renderer`, `actions`. Optional per story: `language` and `world` — `world`
+names a dressed 3D set (e.g. `"khmer-temple"`); unknown world names are hard
+errors, never a silent substitute set.
 
 ```json
 {
@@ -75,7 +77,11 @@ line requires non-empty `text`. Optional per scene: `mood`, `camera`, `renderer`
       "mood": "warm dawn",
       "dur": 6,
       "camera": "dolly",
+      "shot": "wide",
       "renderer": "2d",
+      "actions": [
+        { "character": "jaya", "action": "talk" }
+      ],
       "dialogue": [
         { "speaker": "jaya", "text": "In the heart of the great forest, stone temples rise to touch the clouds.", "subtitle": "Stone temples rise in the forest." }
       ]
@@ -87,6 +93,21 @@ line requires non-empty `text`. Optional per scene: `mood`, `camera`, `renderer`
 Valid moods: `warm dawn`, `gold dust`, `night storm`, `paper`, `green`.
 Valid cameras: `dolly`, `orbit`, `crane`, `handheld`, `static`.
 Valid actions: `idle`, `walk`, `talk`, `turn`, `gesture`, `react`.
+
+Valid shots (per scene — framing from `remotion/lib/camera.ts`, with the rig
+adding the motion on top):
+
+| Shot | Distance | Look-at | Framing |
+|---|---|---|---|
+| `close-up` | 2.5 m | head (y 1.7) | tight on the speaker, ~55% of frame height |
+| `medium` | 4.0 m | head (y 1.7) | the talk shot — speaker holds 40–60% of frame height |
+| `wide` | 11 m | y 3.9 | establishing: horizon on the lower third, temple + sky above |
+| `over-shoulder` | 3.9 m, behind the listener | speaker's head | two-hander; needs ≥2 characters with `modelUrl` (validator enforces) |
+
+`dolly` pushes in along the shot bearing, `orbit` sweeps ±arc around it
+(never behind the set), `crane` rises 2.5 m into the shot height,
+`handheld` adds seeded simplex shake, `static` holds. All poses are pure
+functions of the frame index — no wall-clock, no `Math.random`.
 
 ## Adding voices / characters / models
 

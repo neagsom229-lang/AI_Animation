@@ -125,3 +125,204 @@ export function getCameraPose(
       return { position: [0, 5, 15], lookAt: [0, 2, 0] };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Shot types (Phase D)
+// ---------------------------------------------------------------------------
+
+/**
+ * Framing vocabulary for a scene (`shot` in the story JSON):
+ *
+ *  - close-up      — 2.5 m from the head; the speaker fills ~55% of the frame
+ *  - medium        — 4.0 m; the classic talk shot, ~53% frame height
+ *  - wide          — 11 m, eye-tilted up so the horizon sits on the lower
+ *                    third and the temple/sky own the frame (~20% character)
+ *  - over-shoulder — behind the listener, looking at the speaker's head
+ *
+ * Talk shots (close-up / medium / over-shoulder) keep the speaking character
+ * between 40% and 60% of the frame height — enforced in tests/camera.test.js
+ * from the fov 45° used by StoryFilm's PerspectiveCamera.
+ */
+export type ShotType = 'close-up' | 'medium' | 'wide' | 'over-shoulder';
+
+export interface ShotSpec {
+  /** Horizontal distance from the look-at target to the camera (metres). */
+  distance: number;
+  /** Camera height in metres (world y). */
+  height: number;
+  /** World-space look-at point — head height for talk shots. */
+  target: Vec3;
+  /** Yaw of the camera around the target: 0 = camera on the +z side. */
+  azimuth: number;
+  /** Distance multiplier at frame 0 of a dolly push (1 = no push-in). */
+  dollyStart: number;
+  /** Orbit half-arc in radians — swings ±arc around `azimuth`. */
+  arc: number;
+}
+
+// --- Blocking (single source of truth for StoryFilm and the shots) ----------
+
+/** The speaking character stands at the origin and faces the listener. */
+export const SPEAKER_POSITION: Vec3 = [0, 0, 0];
+/** The listener stands here — close enough to fill the near field of an OTS. */
+export const LISTENER_POSITION: Vec3 = [-1.1, 0, 1.5];
+/** Head height of the shipped 1.8 m character: the talk-shot look-at. */
+export const HEAD_HEIGHT = 1.7;
+/** Yaw making the speaker face the listener (facing = (sin yaw, 0, cos yaw)). */
+export const SPEAKER_YAW = Math.atan2(
+  LISTENER_POSITION[0] - SPEAKER_POSITION[0],
+  LISTENER_POSITION[2] - SPEAKER_POSITION[2]
+);
+/** Yaw making the listener face the speaker. */
+export const LISTENER_YAW = Math.atan2(
+  SPEAKER_POSITION[0] - LISTENER_POSITION[0],
+  SPEAKER_POSITION[2] - LISTENER_POSITION[2]
+);
+
+/**
+ * Over-shoulder geometry: the camera sits behind the listener on the
+ * speaker→listener line (azimuth of that line), pulled back far enough that
+ * the speaker holds ~56% of the frame, then swung clear of that line so the
+ * listener's head reads at the edge of frame instead of covering the
+ * speaker. The offset must keep the whole orbit arc on one side of the
+ * speaker→listener line: with the old ±0.25 arc and 0.16 offset the sweep
+ * crossed it and the two heads were 1 px apart at f41 (full occlusion).
+ */
+const OTS_AZIMUTH =
+  Math.atan2(LISTENER_POSITION[0], LISTENER_POSITION[2]) + 0.5;
+const OTS_DISTANCE = 3.86;
+
+export const SHOT_SPECS: Record<ShotType, ShotSpec> = {
+  'close-up': {
+    distance: 2.5,
+    height: 1.62,
+    target: [0, HEAD_HEIGHT, 0],
+    azimuth: 0,
+    dollyStart: 1.1,
+    arc: 0.3
+  },
+  'medium': {
+    distance: 4.0,
+    height: 1.65,
+    target: [0, HEAD_HEIGHT, 0],
+    azimuth: 0,
+    dollyStart: 1.12,
+    // ±0.4 rad keeps the sweep clear of the listener's bearing (-0.637 rad):
+    // a wider arc crosses the speaker→listener line and the camera lines the
+    // two heads up (the old ±1.0 put them 4 px apart at f41).
+    arc: 0.4
+  },
+  wide: {
+    // Eye-level-ish, tilted up: horizon lands at ~65% from the top (the lower
+    // third), the character stands fully inside the bottom band, and the
+    // temple + sky own the upper two thirds.
+    distance: 11,
+    height: 2.55,
+    target: [0, 3.9, 0],
+    azimuth: 0,
+    dollyStart: 1.18,
+    // Narrow sweep: at ±0.5 the start of the arc grazed the listener's
+    // bearing and their heads overlapped by ~7 px at distance.
+    arc: 0.3
+  },
+  'over-shoulder': {
+    distance: OTS_DISTANCE,
+    height: 1.55,
+    target: [0, 1.62, 0],
+    azimuth: OTS_AZIMUTH,
+    dollyStart: 1.08,
+    arc: 0.25
+  }
+};
+
+/**
+ * Evaluate a shot + rig at an exact frame index.
+ *
+ * The shot fixes the framing (distance / height / look-at / bearing); the rig
+ * adds deterministic motion on top of it:
+ *
+ *  - dolly     — push from `distance × dollyStart` in to `distance`
+ *  - orbit     — sweep ±`arc` around the shot bearing (never behind the set)
+ *  - crane     — rise 2.5 m into the shot height
+ *  - handheld  — seeded simplex shake around the shot position
+ *  - static    — the shot position, unmoving
+ *
+ * Pure function of (shot, rig, frame, fps, duration) — Phase 1 contract.
+ *
+ * @throws {Error} When the shot name is unknown (no silent substitute).
+ */
+export function getShotPose(
+  shot: ShotType,
+  rig: CameraRigType,
+  frame: number,
+  fps: number,
+  durationInFrames: number
+): CameraPose {
+  const spec = SHOT_SPECS[shot];
+  if (!spec) {
+    throw new Error(
+      `Unknown shot "${shot}". Known shots: ${Object.keys(SHOT_SPECS).join(', ')}.`
+    );
+  }
+
+  const t = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp'
+  });
+
+  let azimuth = spec.azimuth;
+  let distance = spec.distance;
+  let height = spec.height;
+  let shakeX = 0;
+  let shakeY = 0;
+  let shakeZ = 0;
+
+  switch (rig) {
+    case 'dolly': {
+      distance =
+        spec.distance *
+        interpolate(t, [0, 1], [spec.dollyStart, 1], {
+          easing: Easing.inOut(Easing.cubic)
+        });
+      break;
+    }
+    case 'orbit': {
+      azimuth =
+        spec.azimuth +
+        interpolate(t, [0, 1], [-spec.arc, spec.arc], {
+          easing: Easing.inOut(Easing.quad)
+        });
+      break;
+    }
+    case 'crane': {
+      // Rise 2.5 m into the shot height, but never start below ~0.4 m: a talk
+      // shot at 1.6 m would otherwise begin underground, and the ground plane
+      // is single-sided, so the frame would show through the set.
+      const startHeight = Math.max(0.4, spec.height - 2.5);
+      height =
+        startHeight +
+        (spec.height - startHeight) *
+          interpolate(t, [0, 1], [0, 1], { easing: Easing.inOut(Easing.quad) });
+      break;
+    }
+    case 'handheld': {
+      const tau = frame / fps;
+      shakeX = noise1(tau * 2.7) * 0.12 + noise1(tau * 5.3 + 100) * 0.04;
+      shakeY = noise1(tau * 3.1 + 50) * 0.1 + noise1(tau * 4.7 + 200) * 0.03;
+      shakeZ = noise1(tau * 2.1 + 300) * 0.02;
+      break;
+    }
+    case 'static':
+    default:
+      break;
+  }
+
+  return {
+    position: [
+      spec.target[0] + Math.sin(azimuth) * distance + shakeX,
+      height + shakeY,
+      spec.target[2] + Math.cos(azimuth) * distance + shakeZ
+    ],
+    lookAt: spec.target
+  };
+}
