@@ -13,6 +13,7 @@ import { getCameraPose, lookAtQuaternion } from '../lib/camera.ts';
 import { buildStoryTimeline, type TimedScene, type TimedLine } from '../lib/story-timing.ts';
 import { getSubtitleFont, getSubtitleText } from '../lib/subtitles.ts';
 import { AnimaCharacter } from './AnimaCharacter';
+import { GlbCharacter } from './GlbCharacter';
 import { DustParticles } from './DustParticles';
 
 export interface StoryFilmProps {
@@ -89,6 +90,7 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
               rig={rig}
               fps={fps}
               subtitleFont={subtitleFont}
+              characters={story.characters || []}
             />
           </Sequence>
         );
@@ -104,6 +106,7 @@ interface SceneRendererProps {
   rig: string;
   fps: number;
   subtitleFont: string;
+  characters: any[];
 }
 
 const SceneRenderer: React.FC<SceneRendererProps> = ({
@@ -112,7 +115,8 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   preset,
   rig,
   fps,
-  subtitleFont
+  subtitleFont,
+  characters
 }) => {
   // Frames inside a <Sequence> are LOCAL to that sequence.
   const frame = useCurrentFrame();
@@ -126,13 +130,29 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
     localStart: line.startFrame - scene.startFrame,
   }));
 
-  let activeLine = localLines[0];
-  for (const line of localLines) {
+  // The active dialogue line (sequence-local frames). Index-based so the
+  // speaker can be resolved from spec.dialogue — voice lines are generated
+  // 1:1 in dialogue order by scripts/generate-voice.py.
+  let activeIdx = 0;
+  for (let i = 0; i < localLines.length; i++) {
+    const line = localLines[i];
     if (frame >= line.localStart && frame < line.localStart + line.durationInFrames) {
-      activeLine = line;
+      activeIdx = i;
       break;
     }
   }
+  const activeLine = localLines[activeIdx];
+
+  // Which character speaks, and what is it doing this scene.
+  const dialogue = spec.dialogue || [];
+  const speakerId = dialogue[activeIdx] ? dialogue[activeIdx].speaker : undefined;
+  const charSpec =
+    (speakerId && characters.find((c: any) => c.id === speakerId)) || characters[0];
+  const sceneAction: string | undefined = (
+    (spec.actions || []).find((a: any) => !speakerId || a.character === speakerId) || {}
+  ).action;
+  const charAction = sceneAction || (activeLine ? 'talk' : 'idle');
+  const charUrl = charSpec && charSpec.modelUrl;
 
   return (
     <AbsoluteFill>
@@ -162,16 +182,28 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
           <meshStandardMaterial color="#414c3e" roughness={0.9} />
         </mesh>
 
-        <AnimaCharacter
-          position={[0, 0, 0]}
-          seed={13}
-          speed={0.8}
-          narration={activeLine ? activeLine.text : ''}
-          lookAtTarget={[0, 2, -5]}
-          scale={1}
-          env={activeLine ? activeLine.env : undefined}
-          lineStartFrame={activeLine ? activeLine.localStart : 0}
-        />
+        {charUrl ? (
+          <GlbCharacter
+            modelUrl={charUrl}
+            position={[0, 0, 0]}
+            action={charAction}
+            env={activeLine ? activeLine.env : undefined}
+            lineStartFrame={activeLine ? activeLine.localStart : 0}
+          />
+        ) : (
+          // Legacy fallback for stories without a character modelUrl:
+          // the procedural anima3d rig (still frame-deterministic).
+          <AnimaCharacter
+            position={[0, 0, 0]}
+            seed={13}
+            speed={0.8}
+            narration={activeLine ? activeLine.text : ''}
+            lookAtTarget={[0, 2, -5]}
+            scale={1}
+            env={activeLine ? activeLine.env : undefined}
+            lineStartFrame={activeLine ? activeLine.localStart : 0}
+          />
+        )}
 
         <DustParticles count={25} />
       </ThreeCanvas>
