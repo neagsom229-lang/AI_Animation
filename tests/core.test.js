@@ -8,6 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { validateStory, generateStory } from '../src/core/story.js';
 import { TimelineScheduler, keyframes, Easing } from '../src/core/engine.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 test('validateStory validates correct story', () => {
   const validStory = {
@@ -120,4 +122,24 @@ test('TimelineScheduler handles seek and scene lookup', () => {
 
   scheduler.seek(7);
   assert.strictEqual(timeUpdated, true);
+});
+
+test('every character modelUrl in shipped stories exists on disk', () => {
+  const storiesDir = path.resolve('src', 'stories');
+  const files = fs.readdirSync(storiesDir).filter((f) => f.endsWith('.json')).sort();
+  assert.ok(files.length > 0, 'no story JSON files found in src/stories');
+  let checked = 0;
+  for (const f of files) {
+    const story = JSON.parse(fs.readFileSync(path.join(storiesDir, f), 'utf8'));
+    for (const c of story.characters || []) {
+      if (c.modelUrl) {
+        assert.ok(
+          fs.existsSync(c.modelUrl),
+          `modelUrl "${c.modelUrl}" for character "${c.id}" in ${f} does not exist on disk`
+        );
+        checked += 1;
+      }
+    }
+  }
+  assert.ok(checked > 0, 'no character modelUrl found in shipped stories');
 });
