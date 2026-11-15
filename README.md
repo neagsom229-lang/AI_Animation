@@ -43,7 +43,8 @@ Outputs land in `out/`:
 
 - `out/<story>.mp4` — final film (h264, 1920x1080 @ 30 fps)
 - `out/<story>.srt` — subtitles timed from the same voice data as the film
-- `out/<story>-contact.jpg` — contact-sheet preview (frame 30)
+- `out/<story>-contact.png` — contact sheet: 6 frames evenly spread across the
+  whole film (3x2 grid, first and last frame included)
 
 ### Mock mode
 

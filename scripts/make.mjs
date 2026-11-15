@@ -21,6 +21,13 @@ import { bundle } from '@remotion/bundler';
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer';
 import { validateStory, KNOWN_LANGUAGES } from '../src/core/story.js';
 import { buildSrt } from './lib/srt.mjs';
+import {
+  pickContactFrames,
+  tileContactSheet,
+  CONTACT_FRAME_COUNT,
+  CONTACT_SHEET_COLS,
+  CONTACT_CELL_WIDTH,
+} from './lib/contact-sheet.mjs';
 
 export function parseArgs(argv) {
   const args = {
@@ -158,18 +165,44 @@ async function main() {
   fs.writeFileSync(srtPath, buildSrt(voiceData), 'utf-8');
   console.log(`Wrote subtitles: ${srtPath}`);
 
-  // Step 4: Render contact-sheet preview (still at frame 30)
-  console.log('[4/4] Generating contact-sheet preview image...');
-  const contactSheetPath = path.join(outDir, `${storyName}-contact.jpg`);
-  await renderStill({
-    composition,
-    serveUrl: bundled,
-    output: contactSheetPath,
-    frame: 30,
-    inputProps,
-    ...(browserExecutable ? { browserExecutable } : {}),
-  });
-  console.log(`Generated contact-sheet preview at: ${contactSheetPath}`);
+  // Step 4: render evenly spaced stills across the WHOLE clip and tile them
+  // into a real contact sheet (the old version rendered a single frame and
+  // called it a sheet). Frame picks are pure arithmetic on the clip length,
+  // so the sheet is deterministic like everything else.
+  console.log('[4/4] Generating contact sheet...');
+  const contactFrames = pickContactFrames(composition.durationInFrames, CONTACT_FRAME_COUNT);
+  const stillsDir = path.join(outDir, `.contact-${storyName}`);
+  fs.mkdirSync(stillsDir, { recursive: true });
+  const contactSheetPath = path.join(outDir, `${storyName}-contact.png`);
+  let sheet;
+  try {
+    const inputs = [];
+    for (const frame of contactFrames) {
+      const stillPath = path.join(stillsDir, `frame-${String(frame).padStart(4, '0')}.png`);
+      await renderStill({
+        composition,
+        serveUrl: bundled,
+        output: stillPath,
+        frame,
+        imageFormat: 'png',
+        inputProps,
+        ...(browserExecutable ? { browserExecutable } : {}),
+      });
+      inputs.push(stillPath);
+    }
+    sheet = tileContactSheet({
+      inputs,
+      output: contactSheetPath,
+      cols: CONTACT_SHEET_COLS,
+      cellWidth: CONTACT_CELL_WIDTH,
+    });
+  } finally {
+    fs.rmSync(stillsDir, { recursive: true, force: true });
+  }
+  console.log(
+    `Generated contact sheet (${sheet.frames} frames ${contactFrames.join(',')}) ` +
+      `at ${sheet.output} (${sheet.width}x${sheet.height}, ${sheet.cols}x${sheet.rows})`
+  );
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
