@@ -180,10 +180,15 @@ test('GlbCharacter seeks the mixer with mixer.setTime(frame / fps)', () => {
   assert.ok(/headNodRadians\(/.test(src), 'bone-nod fallback must be applied');
 });
 
-test('StoryFilm renders the GLB character with the story modelUrl', () => {
+test('StoryFilm renders the character through the VRM/GLB dispatch', () => {
   const src = readFileSync(STORY_FILM, 'utf8');
-  assert.ok(/<GlbCharacter\b/.test(src), 'StoryFilm must render GlbCharacter');
-  assert.ok(/modelUrl=\{charUrl\}/.test(src), 'GlbCharacter must receive the story modelUrl');
-  assert.ok(/charSpec && charSpec\.modelUrl/.test(src), 'modelUrl must come from the story cast');
-  assert.ok(/action=\{charAction\}/.test(src), 'GlbCharacter must receive the scene action');
+  // Speaker and listener are dispatched per cast member through
+  // StoryCharacter: vrmUrl → VrmCharacter, modelUrl → GlbCharacter fallback.
+  assert.ok(/<StoryCharacter\b/.test(src), 'StoryFilm must dispatch characters through StoryCharacter');
+  assert.ok(/spec=\{charSpec\}/.test(src), 'the speaker dispatch must receive the story cast member');
+  assert.ok(/action=\{charAction\}/.test(src), 'the speaker must receive the scene action');
+  assert.ok(/if \(spec && spec\.vrmUrl\)/.test(src), 'vrmUrl must come from the story cast');
+  assert.ok(/if \(spec && spec\.modelUrl\)/.test(src), 'modelUrl must come from the story cast');
+  assert.ok(/<VrmCharacter\b/.test(src), 'StoryFilm must render the VRM path');
+  assert.ok(/<GlbCharacter\b/.test(src), 'StoryFilm must keep the GLB fallback path');
 });

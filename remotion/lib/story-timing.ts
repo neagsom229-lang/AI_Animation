@@ -20,9 +20,23 @@ export interface TimedLine {
   text: string;
   subtitle?: string;
   env?: number[];
+  /** Rhubarb mouth cues (seconds relative to the line's audio start). */
+  mouthCues?: RhubarbCue[];
   /** Absolute start frame in the composition. */
   startFrame: number;
   durationInFrames: number;
+}
+
+/**
+ * One Rhubarb Lip Sync mouth cue. `value` is one of A–F (Preston Blair
+ * shapes); see remotion/lib/vrm-anim.ts for the viseme mapping. No rhubarb
+ * output ships with the repo yet (CREDITS.md) — this path exists so the
+ * data can be dropped in without code changes.
+ */
+export interface RhubarbCue {
+  start: number;
+  end: number;
+  value: string;
 }
 
 export interface TimedScene {
@@ -49,6 +63,7 @@ export interface VoiceLineLike {
   text?: string;
   subtitle?: string;
   env?: number[];
+  mouthCues?: RhubarbCue[];
   dur?: number;
 }
 
@@ -92,6 +107,7 @@ export function buildStoryTimeline(
         text: line.text || '',
         subtitle: line.subtitle,
         env: line.env,
+        mouthCues: line.mouthCues,
         startFrame: cursor + lineCursor,
         durationInFrames,
       };

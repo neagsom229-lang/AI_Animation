@@ -117,6 +117,22 @@ Files used: `kenney-castle-stairs-stone.glb`, `kenney-castle-wall.glb`,
 
 ---
 
+## 8. VRM characters — `Vita.vrm` / `Vivi.vrm` (CC0)
+
+| Field | Value |
+|---|---|
+| Assets | `Vita.vrm` (9,173,504 B) and `Vivi.vrm` (10,532,636 B), shipped in `public/models/characters/` |
+| Source | `https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/beta/Vita.vrm` and same path for `Vivi.vrm` — madjin/vrm-samples, the "VRoid Studio CC0 sample avatars" pack (downloaded 2026-11-15; originals kept in `assets-src/vrm/`, gitignored) |
+| License | **CC0 (public domain)** — `extensions.VRM.meta.licenseName` is `"CC0"` in both source and shipped files, verified programmatically; madjin/vrm-samples distributes these VRoid-generated avatars as CC0. No attribution required; credited here for provenance. |
+| Shrink | Originals re-encoded by the in-repo tool `scripts/shrink-vrm.mjs` (wraps `scripts/lib/vrm-shrink.mjs`): embedded PNG textures > 1024 px area-averaged down to ≤ 1024 px, JSON rounded-trip is byte-preserving for everything except `bufferViews[].byteOffset/byteLength` and `buffers[0].byteLength`. Post-shrink verification (file, before → after): `extensions.VRM` intact — licenseName `CC0` unchanged, 15 blendshape groups, 54 humanoid bones unchanged. |
+| Looks (verified by isolated single-character renders, 2026-11-16) | `Vita.vrm` renders the **white/silver-hair cat-ear avatar** (heterochromia: yellow left / green right eye, cheek markings, black + teal coat). `Vivi.vrm` renders the **brown-bob avatar** (orange hair ribbon, green eyes, cream + green dress). The file names themselves do not indicate appearance — this was confirmed by rendering each file alone, not by assumption. |
+| Used as | Story cast, `src/stories/khmer-temple.json`: `reach` (k2 speaker) → `Vivi.vrm`, `vrmScale` 1.27 (equal head heights across the pair); `minea` (k1 speaker) → `Vita.vrm`, `vrmScale` 1. Facial animation (blink/visemes/gaze), solved never-T-pose arm stance and lip-sync all run on the VRM path with the Phase B GLB path kept as fallback (`modelUrl`). |
+| Provenance note | Attribution of *which* file renders *which* avatar is recorded here because both files come from the same URL pattern; the mapping is load-bearing for the cast layout. |
+
+**Library note:** `@pixiv/three-vrm` 3.5.5 (MIT License, © pixiv Inc.) is used as the VRM loader/rig driver — it ships no artwork. `three` 0.160.1 (MIT) is already in use since Phase B.
+
+---
+
 ## Also downloaded (staging copies in `assets-src/`, not shipped)
 
 Kept for provenance/inspection only — none of these are referenced by the film:

@@ -56,6 +56,13 @@ const GROUND_REPEAT = 150;
 /** Sun position: behind-left of the temple, so shadows rake toward camera. */
 const SUN_POSITION: [number, number, number] = [-20, 14, -34];
 
+/**
+ * Warm-sand multiplier for every prop material (Goal 3 palette re-grade).
+ * The Kenney kits' cream albedo read cool against the sunset ground; this
+ * drops the blue channel so stone and wood sit in the same warm envelope.
+ */
+const PROP_TINT = new THREE.Color('#eee3c8');
+
 // ---------------------------------------------------------------------------
 // Sky + image-based lighting from the Poly Haven sunset HDRI
 // ---------------------------------------------------------------------------
@@ -148,6 +155,7 @@ const Ground: React.FC = () => {
         roughnessMap={rough}
         roughness={1}
         metalness={0}
+        color="#f3e9d2"
       />
     </mesh>
   );
@@ -182,6 +190,7 @@ const Platform: React.FC<{ layout: WorldLayout }> = ({ layout }) => {
         roughnessMap={rough}
         roughness={1}
         metalness={0}
+        color="#eae0c6"
       />
     </mesh>
   );
@@ -277,6 +286,24 @@ const PropInstance: React.FC<PropPlacement & { renderOrder: number }> = ({
         // renderOrder BEFORE material.id, and material ids depend on the order
         // the GLBs happen to finish parsing — which varies run to run.
         mesh.renderOrder = renderOrder;
+        // Palette re-grade (Goal 3): the Kenney kits ship a cool, pale
+        // cream that read flat against the warm sunset ground/HDRI. Every
+        // material is multiplied toward the same warm-sand tone the ground
+        // uses. Materials are cloned first so instances sharing a GLB do
+        // not double-apply the tint.
+        if (Array.isArray(mesh.material)) {
+          mesh.material = mesh.material.map((mat) => {
+            const m = mat.clone();
+            const maybeColor = (m as THREE.MeshStandardMaterial).color;
+            if (maybeColor && maybeColor.isColor) maybeColor.multiply(PROP_TINT);
+            return m;
+          });
+        } else if (mesh.material) {
+          const m = mesh.material.clone();
+          const maybeColor = (m as THREE.MeshStandardMaterial).color;
+          if (maybeColor && maybeColor.isColor) maybeColor.multiply(PROP_TINT);
+          mesh.material = m;
+        }
       }
     });
     return clone;

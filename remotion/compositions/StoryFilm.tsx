@@ -30,12 +30,79 @@ import {
   type CameraRigType,
   type ShotType
 } from '../lib/camera.ts';
-import { buildStoryTimeline, type TimedScene, type TimedLine } from '../lib/story-timing.ts';
+import { buildStoryTimeline, type TimedScene, type TimedLine, type RhubarbCue } from '../lib/story-timing.ts';
 import { getSubtitleFont, getSubtitleText, SUBTITLE_LAYOUT } from '../lib/subtitles.ts';
 import { AnimaCharacter } from './AnimaCharacter';
 import { GlbCharacter } from './GlbCharacter';
+import { VrmCharacter } from './VrmCharacter';
 import { SceneWorld } from './SceneWorld';
 import { DustParticles } from './DustParticles';
+
+/**
+ * Eye height used as the gaze fixpoint between characters (metres). The
+ * VRM heads sit near 1.5 m (Vita) / 1.5 m after Vivi's 1.27 scale, and the
+ * camera frames heads at camera.ts's HEAD_HEIGHT — this is the shared
+ * eye line for both, not a per-model exact value.
+ */
+const GAZE_HEAD_HEIGHT = 1.5;
+
+interface StoryCharacterProps {
+  spec: any;
+  position: [number, number, number];
+  rotationY: number;
+  action?: string;
+  env?: number[];
+  lineStartFrame?: number;
+  mouthCues?: RhubarbCue[];
+  gazeTarget: [number, number, number];
+}
+
+/**
+ * Per-character model dispatch: `vrmUrl` → the Goal 3 VRM path (facial
+ * animation, solved never-T-pose, gaze), `modelUrl` → the Phase B GLB path
+ * as fallback. Returns null only if the spec has neither (the caller then
+ * falls back to the legacy anima3d rig).
+ */
+const StoryCharacter: React.FC<StoryCharacterProps> = ({
+  spec,
+  position,
+  rotationY,
+  action,
+  env,
+  lineStartFrame,
+  mouthCues,
+  gazeTarget
+}) => {
+  if (spec && spec.vrmUrl) {
+    return (
+      <VrmCharacter
+        modelUrl={spec.vrmUrl}
+        position={position}
+        rotationY={rotationY}
+        scale={typeof spec.vrmScale === 'number' ? spec.vrmScale : 1}
+        action={action}
+        env={env}
+        lineStartFrame={lineStartFrame}
+        mouthCues={mouthCues}
+        seed={spec.id || 'vrm'}
+        gazeTarget={gazeTarget}
+      />
+    );
+  }
+  if (spec && spec.modelUrl) {
+    return (
+      <GlbCharacter
+        modelUrl={spec.modelUrl}
+        position={position}
+        rotationY={rotationY}
+        action={action}
+        env={env}
+        lineStartFrame={lineStartFrame}
+      />
+    );
+  }
+  return null;
+};
 
 export interface StoryFilmProps {
   story?: any;
@@ -236,12 +303,12 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   ).action;
   const charAction = sceneAction || (activeLine ? 'talk' : 'idle');
   const charUrl = charSpec && charSpec.modelUrl;
+  const charVrmUrl = charSpec && charSpec.vrmUrl;
   // Conversation blocking: when the story has a second character they stand
   // on the listener mark facing the speaker (camera.ts owns the layout), so
   // two-person shots — especially over-the-shoulder — have someone to frame.
   const listenerSpec = characters.find((c: any) => c.id !== (charSpec && charSpec.id));
-  const listenerUrl = listenerSpec && listenerSpec.modelUrl;
-  const hasListener = Boolean(listenerUrl);
+  const hasListener = Boolean(listenerSpec && (listenerSpec.vrmUrl || listenerSpec.modelUrl));
 
   return (
     <AbsoluteFill>
@@ -284,10 +351,13 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
           quaternion={cameraRotation}
         />
 
-        {charUrl ? (
+        {/* Character dispatch: a spec with `vrmUrl` renders the VRM path
+            (Goal 3), `modelUrl` keeps the Phase B GLB path as fallback, and
+            stories with neither get the legacy anima3d rig below. */}
+        {charUrl || charVrmUrl ? (
           <>
-            <GlbCharacter
-              modelUrl={charUrl}
+            <StoryCharacter
+              spec={charSpec}
               position={SPEAKER_POSITION}
               // Face the listener mark for a real conversation; a solo
               // character keeps facing the camera.
@@ -295,13 +365,22 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
               action={charAction}
               env={activeLine ? activeLine.env : undefined}
               lineStartFrame={activeLine ? activeLine.localStart : 0}
+              mouthCues={activeLine ? activeLine.mouthCues : undefined}
+              // Eyes: speaker watches the listener, listener watches the
+              // speaker; a solo character watches the camera lens.
+              gazeTarget={
+                hasListener
+                  ? [LISTENER_POSITION[0], GAZE_HEAD_HEIGHT, LISTENER_POSITION[2]]
+                  : [pose.position[0], pose.position[1], pose.position[2]]
+              }
             />
             {hasListener && (
-              <GlbCharacter
-                modelUrl={listenerUrl}
+              <StoryCharacter
+                spec={listenerSpec}
                 position={LISTENER_POSITION}
                 rotationY={LISTENER_YAW}
                 action="idle"
+                gazeTarget={[SPEAKER_POSITION[0], GAZE_HEAD_HEIGHT, SPEAKER_POSITION[2]]}
               />
             )}
           </>
@@ -320,8 +399,32 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
           />
         )}
 
+        {/* Soft depth of field on wide shots only: characters stay sharp,
+            the temple backdrop melts. Computed from the live camera pose so
+            the chest/head line is always the focal plane. */}
         <DustParticles count={25} />
       </ThreeCanvas>
+
+      {/* Soft depth-of-field emulation on wide shots (Goal 3): a split-focus
+          overlay — sharp centre (the characters), blurred rim (the temple
+          backdrop). True circle-of-confusion DoF via @react-three/postprocessing
+          draws black under @remotion/three's demand-render path (verified with
+          stills on the software GL renderer), so the wide shot gets this
+          deterministic backdrop blur instead. */}
+      {spec.shot === 'wide' && (
+        <AbsoluteFill
+          style={{
+            pointerEvents: 'none',
+            zIndex: 5,
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            maskImage:
+              'radial-gradient(ellipse 60% 55% at 50% 44%, rgba(0,0,0,0) 42%, rgba(0,0,0,1) 96%)',
+            WebkitMaskImage:
+              'radial-gradient(ellipse 60% 55% at 50% 44%, rgba(0,0,0,0) 42%, rgba(0,0,0,1) 96%)'
+          }}
+        />
+      )}
 
       {localLines.map((line: any, lIdx: number) => (
         <Sequence

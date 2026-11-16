@@ -6,7 +6,11 @@
  *     by string literals in remotion/ and src/ sources exists on disk.
  *  2. Every referenced asset has an entry in CREDITS.md (matched by file
  *     basename) — no uncredited assets can reach a render.
- *  3. Referenced models stay under 5 MB each.
+ *  3. Referenced models stay under 5 MB each. VRM characters are exempt
+ *     (9–11 MB) and held to a documented 12 MB cap instead — they carry a
+ *     full MToon face/body rig plus15 blendshapes, and even after the
+ *     in-repo shrink they cannot fit 5 MB without dropping texture detail
+ *     the close-up shot reads (see CREDITS.md §8).
  *  4. Referenced standalone textures (jpg/png) are <= 2048 px per side
  *     (GLB-embedded textures are capped by gltf-transform --texture-size).
  */
@@ -55,11 +59,14 @@ function collectReferences() {
       if (c.modelUrl) {
         refs.push({ value: c.modelUrl, origin: `src/stories/${f} character "${c.id}"` });
       }
+      if (c.vrmUrl) {
+        refs.push({ value: c.vrmUrl, origin: `src/stories/${f} character "${c.id}" (vrm)` });
+      }
     }
   }
 
   // 2. String literals in remotion/ and src/ sources.
-  const literal = /["'`]((?:public\/)?(?:models|textures|fonts)\/[\w./-]+\.(?:glb|gltf|hdr|jpg|png|ttf|otf|woff2?))["'`]/g;
+  const literal = /["'`]((?:public\/)?(?:models|textures|fonts)\/[\w./-]+\.(?:glb|gltf|hdr|jpg|png|ttf|otf|woff2?|vrm))["'`]/g;
   const sourceDirs = [path.join(ROOT, 'remotion'), path.join(ROOT, 'src')];
   for (const dir of sourceDirs) {
     for (const file of listSources(dir)) {
@@ -122,6 +129,21 @@ test('every referenced model stays under 5 MB', () => {
     assert.ok(
       size < 5 * 1024 * 1024,
       `model "${value}" (${origin}) is ${(size / 1024 / 1024).toFixed(2)} MB (limit 5 MB)`
+    );
+  }
+});
+
+test('referenced VRM characters stay under the 12 MB cap', () => {
+  // VRMs ship a full MToon face/body rig + 15 blendshape groups, so the 5 MB
+  // GLB cap is not attainable; 12 MB keeps them honest without dropping the
+  // texture detail the close-up shot reads. Rationale: CREDITS.md §8.
+  const refs = collectReferences().filter(({ value }) => /\.vrm$/i.test(value));
+  assert.ok(refs.length > 0, 'no VRM references found');
+  for (const { value, origin } of refs) {
+    const size = statSync(resolveRef(value)).size;
+    assert.ok(
+      size < 12 * 1024 * 1024,
+      `VRM "${value}" (${origin}) is ${(size / 1024 / 1024).toFixed(2)} MB (cap 12 MB)`
     );
   }
 });

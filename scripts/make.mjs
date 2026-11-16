@@ -7,6 +7,12 @@
  *   node scripts/make.mjs --story src/stories/khmer-temple.json --lang km
  *   node scripts/make.mjs --story src/stories/historical-angkor.json --lang en
  *   node scripts/make.mjs --story src/stories/khmer-temple.json --mock
+ *   node scripts/make.mjs --story src/stories/khmer-temple.json --gpu
+ *
+ * --gpu renders with Remotion's `gl: 'angle'` (hardware ANGLE/GPU) for
+ * production. The default stays software GL, which is what
+ * scripts/verify-determinism.mjs relies on for its byte-identical check.
+ * Both modes print ms/frame after the render.
  *
  * Flow: story JSON -> edge-tts voice (or --mock) -> voice.json (real durations
  * + 20 Hz envelopes) -> Remotion render -> out/<story>.mp4 + contact sheet.
@@ -35,6 +41,7 @@ export function parseArgs(argv) {
     lang: 'km',
     voice: undefined,
     mock: false,
+    gpu: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -42,6 +49,7 @@ export function parseArgs(argv) {
     else if (a === '--lang' && argv[i + 1]) { args.lang = argv[++i]; }
     else if (a === '--voice' && argv[i + 1]) { args.voice = argv[++i]; }
     else if (a === '--mock') { args.mock = true; }
+    else if (a === '--gpu') { args.gpu = true; }
     else { throw new Error(`Unknown or incomplete argument: ${a}`); }
   }
   if (!KNOWN_LANGUAGES.includes(args.lang)) {
@@ -123,6 +131,11 @@ async function main() {
   // Remotion's auto-detection (Remotion otherwise uses its bundled headless
   // shell, which it downloads on first use).
   const browserExecutable = process.env.CHROME || undefined;
+  // --gpu selects Chromium's ANGLE (hardware) backend for production. The
+  // default is left at Remotion's software path, matching verify:determinism.
+  const glMode = args.gpu ? 'angle' : undefined;
+  const glLabel = args.gpu ? 'angle (GPU)' : 'software (default)';
+  console.log(`[Perf] GL backend for this run: ${glLabel}`);
 
   // Step 2: Bundle Remotion project
   console.log('[2/4] Bundling Remotion project...');
@@ -146,17 +159,25 @@ async function main() {
   const outSuffix = mock ? '-MOCK.mp4' : '.mp4';
   const outVideoPath = path.join(outDir, `${storyName}${outSuffix}`);
 
+  const renderStart = Date.now();
   await renderMedia({
     composition,
     serveUrl: bundled,
     codec: 'h264',
     outputLocation: outVideoPath,
     inputProps,
+    ...(glMode ? { gl: glMode } : {}),
     ...(browserExecutable ? { browserExecutable } : {}),
     onProgress: ({ progress }) => {
       process.stdout.write(`Rendering progress: ${Math.round(progress * 100)}%\r`);
     },
   });
+  const renderMs = Date.now() - renderStart;
+  const msPerFrame = renderMs / composition.durationInFrames;
+  console.log(
+    `\n[Perf] ${composition.durationInFrames} frames in ${(renderMs / 1000).toFixed(1)}s ` +
+      `(${msPerFrame.toFixed(1)} ms/frame, gl=${glLabel})`
+  );
 
   console.log(`\nSuccessfully rendered film to: ${outVideoPath}`);
 
@@ -186,6 +207,7 @@ async function main() {
         frame,
         imageFormat: 'png',
         inputProps,
+        ...(glMode ? { gl: glMode } : {}),
         ...(browserExecutable ? { browserExecutable } : {}),
       });
       inputs.push(stillPath);

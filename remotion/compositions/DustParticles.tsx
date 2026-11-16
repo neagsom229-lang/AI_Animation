@@ -31,11 +31,13 @@ export const DustParticles: React.FC<DustParticlesProps> = ({ count = 24 }) => {
         return (
           <mesh key={mote.id} position={[mote.x, y, mote.z]}>
             <sphereGeometry args={[mote.size, 6, 6]} />
-            {/* Warm, additive sunlit motes instead of flat white dots. */}
+            {/* Warm, additive sunlit motes. Kept faint on purpose: at 0.45
+                the motes bloomed white against the bright sunset sky and read
+                as snow; 0.22 keeps them as glints in the shade. */}
             <meshBasicMaterial
               color="#ffcf8f"
               transparent
-              opacity={0.45}
+              opacity={0.22}
               depthWrite={false}
               blending={THREE.AdditiveBlending}
             />

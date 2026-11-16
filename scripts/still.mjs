@@ -22,12 +22,14 @@ export function parseArgs(argv) {
     story: 'src/stories/khmer-temple.json',
     frames: '30',
     tag: 'still',
+    voice: 'public/voice.json',
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--story' && argv[i + 1]) args.story = argv[++i];
     else if (a === '--frames' && argv[i + 1]) args.frames = argv[++i];
     else if (a === '--tag' && argv[i + 1]) args.tag = argv[++i];
+    else if (a === '--voice' && argv[i + 1]) args.voice = argv[++i];
     else throw new Error(`Unknown or incomplete argument: ${a}`);
   }
   const frames = args.frames.split(',').map((s) => {
@@ -42,7 +44,9 @@ export function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const story = JSON.parse(fs.readFileSync(args.story, 'utf-8'));
-  const voicePath = path.resolve('public', 'voice.json');
+  // --voice lets QA render the same frame against an alternate envelope
+  // (e.g. a zeroed copy) for a controlled mouth open/closed A/B test.
+  const voicePath = path.resolve(args.voice);
   if (!fs.existsSync(voicePath)) {
     throw new Error(
       'public/voice.json not found — generate it first: node scripts/make.mjs --story <story>'
