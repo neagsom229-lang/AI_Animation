@@ -61,17 +61,21 @@ export const GOPURA = { size: [8.5, 5.6, 6.5] as Vec3, position: [0, 2.8, -17.2]
 /** Perimeter enclosure wall: x ∈ [-36, 36], from the gopura back to the terrace. */
 export const WALL = { length: 72, height: 3.4, thickness: 1.1, position: [0, 1.7, -17.2] as Vec3 };
 
-/** Causeway from the foreground to the gopura, crossing the moat. */
-export const CAUSEWAY = { size: [3.6, 0.8, 60] as Vec3, position: [0, 0.4, 9] as Vec3 };
-export const CAUSEWAY_LENGTH_M = CAUSEWAY.size[2];
+/** Causeway: flush approach path (characters stand on it at y≈0) plus the
+ *  raised bridge segment over the moat. */
+export const CAUSEWAY_PATH = { size: [3.6, 0.06, 41.5] as Vec3, position: [0, 0.03, 18.25] as Vec3 };
+export const CAUSEWAY_BRIDGE = { size: [3.6, 0.8, 14] as Vec3, position: [0, 0.4, -9.5] as Vec3 };
+export const CAUSEWAY_LENGTH_M = CAUSEWAY_PATH.size[2] + CAUSEWAY_BRIDGE.size[2];
 
-/** Naga balustrade pair flanking the causeway. */
-export interface NagaRail { start: number; end: number; z0: number; z1: number }
+/** Naga balustrade segments flanking the causeway (bridge + approach). */
+export interface NagaRail { x: number; z0: number; z1: number; y: number }
 export const NAGA_RAILS: NagaRail[] = [
-  { start: -1.9, end: -1.9, z0: -14.0, z1: CAUSEWAY.position[2] + CAUSEWAY.size[2] / 2 },
-  { start: 1.9, end: 1.9, z0: -14.0, z1: CAUSEWAY.position[2] + CAUSEWAY.size[2] / 2 },
+  { x: -1.95, z0: -16.0, z1: -2.75, y: 1.32 },
+  { x: 1.95, z0: -16.0, z1: -2.75, y: 1.32 },
+  { x: -1.95, z0: -2.5, z1: 39.0, y: 0.52 },
+  { x: 1.95, z0: -2.5, z1: 39.0, y: 0.52 },
 ];
-export const NAGA_RAIL_SEGMENTS = 14;
+export const NAGA_RAIL_SEGMENTS = 10;
 
 /** West stair up the terrace to the outer gallery (12 corbelled steps). */
 export const STAIR = { width: 4.4, steps: 12, position: [0, 0.0, -10.9] as Vec3, rise: 0.19, run: 0.42 };
@@ -138,17 +142,15 @@ export function stairTransforms(): InstanceTransform[] {
   return out;
 }
 
-/** Naga balustrade finial transforms along both rails. */
+/** Naga balustrade finial transforms along both causeway segments. */
 export function nagaTransforms(): InstanceTransform[] {
   const out: InstanceTransform[] = [];
   for (const rail of NAGA_RAILS) {
-    const z0 = rail.z0;
-    const z1 = rail.z1;
-    for (let i = 0; i <= NAGA_RAIL_SEGMENTS; i++) {
-      const t = i / NAGA_RAIL_SEGMENTS;
-      const z = z0 + (z1 - z0) * t;
-      const y = 0.8 + (z > 4 ? (z - 4) * 0.028 : 0); // gentle rise toward the moat bridge
-      out.push({ position: [rail.start, y, z], rotationY: 0, scale: 1 });
+    for (let i = 0; i < NAGA_RAIL_SEGMENTS; i++) {
+      const t = i / (NAGA_RAIL_SEGMENTS - 1);
+      const z = rail.z0 + (rail.z1 - rail.z0) * t;
+      // Single-headed cones angled slightly toward the path centre.
+      out.push({ position: [rail.x, rail.y, z], rotationY: 0, scale: 1 });
     }
   }
   return out;
@@ -190,11 +192,12 @@ export interface AngkorLayout {
   prangs: typeof PRANGS;
   gopura: typeof GOPURA;
   wall: typeof WALL;
-  causeway: typeof CAUSEWAY;
+  causewayPath: typeof CAUSEWAY_PATH;
+  causewayBridge: typeof CAUSEWAY_BRIDGE;
+  causewayLengthM: number;
   nagaRails: typeof NAGA_RAILS;
   stair: typeof STAIR;
   water: { position: Vec3; size: [number, number] };
-  laterite: { position: Vec3; size: [number, number] };
   colonnades: InstanceTransform[];
   palms: InstanceTransform[];
   stairs: InstanceTransform[];
@@ -209,15 +212,15 @@ export function buildAngkorLayout(): AngkorLayout {
     prangs: PRANGS,
     gopura: GOPURA,
     wall: WALL,
-    causeway: CAUSEWAY,
+    causewayPath: CAUSEWAY_PATH,
+    causewayBridge: CAUSEWAY_BRIDGE,
+    causewayLengthM: CAUSEWAY_LENGTH_M,
     nagaRails: NAGA_RAILS,
     stair: STAIR,
     water: {
       position: [0, MOAT_Y, (MOAT_FRONT_Z + MOAT_BACK_Z) / 2],
       size: [MOAT_WIDTH_X, MOAT_FRONT_Z - MOAT_BACK_Z],
     },
-    // laterite apron in front of the gopura (walkable laterite, not cracked tan)
-    laterite: { position: [0, 0.01, -1.2], size: [16, 3.0] },
     colonnades: colonnadeTransforms(),
     palms: palmTransforms(),
     stairs: stairTransforms(),

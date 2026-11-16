@@ -355,7 +355,7 @@ export const AngkorWorld: React.FC = () => {
         map: maps.lateriteDiff,
         normalMap: maps.lateriteNor,
         roughnessMap: maps.lateriteRough,
-        color: '#b0a290',
+        color: '#bfb0a0',
         roughness: 1,
       }),
     [maps]
@@ -413,7 +413,7 @@ export const AngkorWorld: React.FC = () => {
     d.scale.setScalar(1);
   });
 
-  const nagaGeo = React.useMemo(() => new THREE.ConeGeometry(0.38, 1.15, 6), []);
+  const nagaGeo = React.useMemo(() => new THREE.ConeGeometry(0.22, 0.72, 6), []);
   const nagaRef = useInstanced(layout.nagas.length, (d, i) => {
     const c = layout.nagas[i];
     d.position.set(c.position[0], c.position[1], c.position[2]);
@@ -504,14 +504,14 @@ export const AngkorWorld: React.FC = () => {
         <planeGeometry args={[300, 300]} />
       </mesh>
 
-      {/* Laterite apron in front of the gopura */}
-      <mesh position={layout.laterite.position} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1} receiveShadow material={lateriteMat}>
-        <planeGeometry args={layout.laterite.size} />
+      {/* Approach path: flush laterite the characters stand on */}
+      <mesh position={layout.causewayPath.position} renderOrder={2} receiveShadow material={lateriteMat}>
+        <boxGeometry args={layout.causewayPath.size} />
       </mesh>
 
-      {/* Causeway (laterite slabs) crossing to the gopura */}
-      <mesh position={layout.causeway.position} renderOrder={2} castShadow receiveShadow material={lateriteMat}>
-        <boxGeometry args={layout.causeway.size} />
+      {/* Bridge segment raised over the moat */}
+      <mesh position={layout.causewayBridge.position} renderOrder={2} castShadow receiveShadow material={lateriteMat}>
+        <boxGeometry args={layout.causewayBridge.size} />
       </mesh>
 
       {/* Moat: water + laterite rim */}

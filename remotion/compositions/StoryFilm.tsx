@@ -23,6 +23,7 @@ import {
   getCameraPose,
   getShotPose,
   lookAtQuaternion,
+  shotFov,
   SPEAKER_POSITION,
   SPEAKER_YAW,
   LISTENER_POSITION,
@@ -344,7 +345,7 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
 
         <PerspectiveCamera
           makeDefault
-          fov={45}
+          fov={shotFov(spec.shot)}
           near={0.1}
           far={1000}
           position={pose.position}
@@ -402,22 +403,23 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
         {/* Soft depth of field on wide shots only: characters stay sharp,
             the temple backdrop melts. Computed from the live camera pose so
             the chest/head line is always the focal plane. */}
-        <DustParticles count={25} />
+        {/* Dust motes — sparse and faint against the sunset sky. */}
+        <DustParticles count={14} />
       </ThreeCanvas>
 
-      {/* Soft depth-of-field emulation on wide shots (Goal 3): a split-focus
-          overlay — sharp centre (the characters), blurred rim (the temple
-          backdrop). True circle-of-confusion DoF via @react-three/postprocessing
-          draws black under @remotion/three's demand-render path (verified with
-          stills on the software GL renderer), so the wide shot gets this
-          deterministic backdrop blur instead. */}
-      {spec.shot === 'wide' && (
+      {/* Soft depth-of-field emulation (Goal 3, widened in Phase 4):
+          wides get the full split-focus falloff (sharp centre / blurred
+          rim); over-the-shoulder shots get a gentler one that softens the
+          listener's foreground shoulder without losing the speaker.
+          True circle-of-confusion DoF draws black in this pipeline
+          (verified), so this deterministic backdrop blur is used. */}
+      {(spec.shot === 'wide' || spec.shot === 'over-shoulder') && (
         <AbsoluteFill
           style={{
             pointerEvents: 'none',
             zIndex: 5,
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
+            backdropFilter: spec.shot === 'wide' ? 'blur(6px)' : 'blur(4px)',
+            WebkitBackdropFilter: spec.shot === 'wide' ? 'blur(6px)' : 'blur(4px)',
             maskImage:
               'radial-gradient(ellipse 60% 55% at 50% 44%, rgba(0,0,0,0) 42%, rgba(0,0,0,1) 96%)',
             WebkitMaskImage:
@@ -436,7 +438,7 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
         </Sequence>
       ))}
 
-      {activeLine && (
+      {activeLine && (activeLine.text || activeLine.subtitle ? true : false) && (
         <Subtitle
           key={`${scene.id}-${activeLine.startFrame}`}
           text={getSubtitleText(activeLine)}

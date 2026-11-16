@@ -18,7 +18,9 @@ import {
   MOAT_FRONT_Z,
   MOAT_BACK_Z,
   MOAT_WIDTH_X,
-  CAUSEWAY,
+  CAUSEWAY_PATH,
+  CAUSEWAY_BRIDGE,
+  CAUSEWAY_LENGTH_M,
   PALM_COUNT,
 } from '../remotion/lib/angkor.ts';
 
@@ -54,13 +56,20 @@ test('three galleries, floors rise, footprints shrink', () => {
   }
 });
 
-test('the moat crosses the site and the causeway bridges it completely', () => {
+test('the moat crosses the site; the bridge spans it; the path approaches', () => {
   assert.ok(MOAT_FRONT_Z > MOAT_BACK_Z, 'moat z ordering');
   assert.ok(MOAT_WIDTH_X >= 70, 'moat must run edge to edge');
-  const causewayZMin = CAUSEWAY.position[2] - CAUSEWAY.size[2] / 2;
-  const causewayZMax = CAUSEWAY.position[2] + CAUSEWAY.size[2] / 2;
-  assert.ok(causewayZMin <= MOAT_BACK_Z, 'causeway must reach the far bank');
-  assert.ok(causewayZMax >= MOAT_FRONT_Z, 'causeway must reach the near bank');
+  const bridgeZMin = CAUSEWAY_BRIDGE.position[2] - CAUSEWAY_BRIDGE.size[2] / 2;
+  const bridgeZMax = CAUSEWAY_BRIDGE.position[2] + CAUSEWAY_BRIDGE.size[2] / 2;
+  assert.ok(bridgeZMin <= MOAT_BACK_Z + 0.01, 'bridge must reach the far bank');
+  assert.ok(bridgeZMax >= MOAT_FRONT_Z - 0.01, 'bridge must reach the near bank');
+  const pathZMin = CAUSEWAY_PATH.position[2] - CAUSEWAY_PATH.size[2] / 2;
+  const pathZMax = CAUSEWAY_PATH.position[2] + CAUSEWAY_PATH.size[2] / 2;
+  assert.ok(pathZMin <= MOAT_FRONT_Z + 0.01, 'path must meet the bridge at the near bank');
+  assert.ok(pathZMax > 30, 'path must reach the foreground');
+  assert.ok(CAUSEWAY_BRIDGE.position[1] > 0.2, 'bridge sits above water level');
+  assert.ok(CAUSEWAY_PATH.size[1] <= 0.1, 'approach path is flush with the terrain');
+  assert.equal(CAUSEWAY_LENGTH_M, CAUSEWAY_PATH.size[2] + CAUSEWAY_BRIDGE.size[2]);
 });
 
 test('colonnade instances exist and stand on their gallery floors', () => {

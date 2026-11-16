@@ -217,7 +217,13 @@ def main():
         dialogue_list = scene.get("dialogue", [])
         
         if not dialogue_list:
-            dialogue_list = [{"speaker": "narrator", "text": scene.get("name", scene_id), "subtitle": scene.get("name", "")}]
+            if scene.get("silent"):
+                # Silent establishing scene: plays public/voice/k0-silence.mp3
+                # (committed, 2.4 s of digital silence with a matching env of
+                # zeros) — never synthesized by TTS, so no narration is faked.
+                dialogue_list = [{"speaker": "silence", "text": "", "subtitle": "", "silent": True}]
+            else:
+                dialogue_list = [{"speaker": "narrator", "text": scene.get("name", scene_id), "subtitle": scene.get("name", "")}]
 
         scene_lines = []
         scene_total_dur = 0.0
@@ -231,7 +237,11 @@ def main():
 
             prefix = "mock-" if args.mock else ""
             ext = ".wav" if args.mock else ".mp3"
-            audio_filename = f"{prefix}{scene_id}-{line_idx}-{text_hash[:8]}{ext}"
+            if dlg.get("silent"):
+                # Silent scenes play the committed silence file; no TTS run.
+                audio_filename = "k0-silence.mp3"
+            else:
+                audio_filename = f"{prefix}{scene_id}-{line_idx}-{text_hash[:8]}{ext}"
             audio_path = os.path.join(args.out, audio_filename)
             json_dir = os.path.dirname(os.path.abspath(args.json)) or '.'
             rel_path = os.path.relpath(os.path.abspath(audio_path), json_dir).replace(os.sep, '/')
@@ -280,7 +290,8 @@ def main():
                 "dur": round(exact_dur, 3),
                 "text": text,
                 "subtitle": subtitle,
-                "env": env
+                "env": env,
+                "silent": bool(dlg.get("silent")),
             })
             scene_total_dur += exact_dur
 

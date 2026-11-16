@@ -145,6 +145,23 @@ export function getCameraPose(
  */
 export type ShotType = 'close-up' | 'medium' | 'wide' | 'over-shoulder';
 
+/**
+ * Per-scene lens (Phase 4): 35–50 mm equivalent band. Vertical fov in
+ * degrees — wides breathe a touch, talk shots tighten.
+ */
+export const SHOT_FOV: Record<ShotType, number> = {
+  wide: 50,
+  medium: 42,
+  'over-shoulder': 44,
+  'close-up': 38,
+};
+
+/** fov for a scene's shot; scenes without a shot keep the legacy 45°. */
+export function shotFov(shot?: string): number {
+  if (shot && shot in SHOT_FOV) return SHOT_FOV[shot as ShotType];
+  return 45;
+}
+
 export interface ShotSpec {
   /** Horizontal distance from the look-at target to the camera (metres). */
   distance: number;

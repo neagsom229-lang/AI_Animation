@@ -47,6 +47,11 @@ export function buildSrt(voiceData, gapSec = 0.75) {
       const start = cursor;
       const end = cursor + line.dur;
       const text = (line.subtitle || line.text || '').trim();
+      if (line.silent === true) {
+        // Silent establishing filler: contributes time but no caption cue.
+        cursor = end;
+        continue;
+      }
       if (!text) {
         throw new Error(`buildSrt: empty subtitle text for scene ${scene.id}`);
       }

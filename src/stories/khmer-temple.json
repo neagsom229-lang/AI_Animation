@@ -11,12 +11,24 @@
   ],
   "scenes": [
     {
+      "id": "k0",
+      "name": "អង្គរ",
+      "mood": "warm dawn",
+      "dur": 2.4,
+      "camera": "crane",
+      "shot": "wide",
+      "renderer": "3d",
+      "silent": true,
+      "actions": [],
+      "dialogue": []
+    },
+    {
       "id": "k1",
       "name": "ព្រឹកព្រលឹមនៅអង្គរ",
       "mood": "warm dawn",
       "dur": 6,
-      "camera": "dolly",
-      "shot": "wide",
+      "camera": "orbit",
+      "shot": "over-shoulder",
       "renderer": "2d",
       "actions": [
         { "character": "minea", "action": "talk" }
@@ -31,7 +43,7 @@
       "mood": "gold dust",
       "dur": 8,
       "camera": "orbit",
-      "shot": "medium",
+      "shot": "over-shoulder",
       "renderer": "3d",
       "actions": [
         { "character": "reach", "action": "talk" }

@@ -119,7 +119,7 @@ const Sun: React.FC<{ preset: MoodPreset }> = ({ preset }) => (
         shadows — it only lifts the shadow side. */}
     <directionalLight
       color={preset.ambient}
-      intensity={preset.intensity * 0.45}
+      intensity={preset.intensity * 0.6}
       position={[6, 8, 18]}
     />
   </>
