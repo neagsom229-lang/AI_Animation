@@ -175,7 +175,7 @@ function khmerTemple(): WorldLayout {
     },
     // Sits inside the 6x6 tile field, below the riverbed rim.
     water: { position: [-11, 0.02, 2], size: [5.4, 5.4] },
-    glow: { position: [0, 9, -55], scale: 14, color: '#ffd9a0', opacity: 0.35 },
+    glow: { position: [0, 9, -55], scale: 14, color: '#ffdfae', opacity: 0.16 },
     props
   };
 }

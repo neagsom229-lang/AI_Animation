@@ -133,6 +133,23 @@ Files used: `kenney-castle-stairs-stone.glb`, `kenney-castle-wall.glb`,
 
 ---
 
+## 9. Angkor Wat set — Poly Haven PBR textures (CC0)
+
+Downloaded 2026-11-16 via the official API (`https://api.polyhaven.com/files/<id>`), every file MD5-verified against the checksum the API publishes. `nor_gl` = OpenGL-orientation normal (the pose this pipeline uses), 1k JPG, designed for `MeshStandardMaterial`. Used by `remotion/compositions/AngkorWorld.tsx` / `SceneWorld.tsx`. All Poly Haven assets are CC0 (https://polyhaven.com/license) — no attribution required; credited for provenance. `large_sandstone_blocks_01` is used for the gallery tier bodies, `old_sandstone_02` for walls/gopura/prangs, `mossy_sandstone` for moss accents + corbel courses, `red_laterite_soil_stones` for the laterite terrace/causeway, `grass_ground` for the forest floor, `palm_bark` for procedural palm trunks.
+
+| Asset | File (1k JPG) | MD5 | Used as |
+|---|---|---|---|
+| old_sandstone_02 | old_sandstone_02_diff_1k.jpg / _nor_gl_1k.jpg / _rough_1k.jpg | 45235f7669057df7cdbb24cac89beede / 896ccd3108b5376f3ffa9f141e2086fb / 4c01a032f589b5dbe1156bb1968f35ef | wall/gopura/prang albedo+normal+rough |
+| large_sandstone_blocks_01 | large_sandstone_blocks_01_diff_1k.jpg / _nor_gl_1k.jpg / _rough_1k.jpg | 78dd6175efd141c63bf19cc40f97cb9a / cb9717ae6a54990c0bc57b1e10f674a8 / 86bbd9600437cdcacc989423a8d49b1d | gallery tier bodies, moat banks |
+| mossy_sandstone | mossy_sandstone_diff_1k.jpg / _nor_gl_1k.jpg / _rough_1k.jpg | c5fecb142f49694839236182d2449deb / cc30004b15373b0f42ad26bdc232673e / 791f76663a4e483b4e8605f75e9436d8 | moss courses, corbel rings, gopura cap, naga finials |
+| grass_ground | grass_ground_diff_1k.jpg / _nor_gl_1k.jpg / _rough_1k.jpg | 299047258586c762735b7284d3c662c3 / d518c5b2af6f2c0297bc807b351f511f / 2e6afca246cf6b80bdb53f46fe7e5ce5 | forest floor |
+| red_laterite_soil_stones | red_laterite_soil_stones_diff_1k.jpg / _nor_gl_1k.jpg / _rough_1k.jpg | f5d483e42da0c704f320b8c159ebca5e / 08737e3b461efa2583c648fbb3472e84 / 564a0faa8182a6cdb0fcff8e357dc064 | terrace, causeway, apron, banks |
+| palm_bark | palm_bark_diff_1k.jpg / _nor_gl_1k.jpg / _rough_1k.jpg | 89e6474313f1547e3c12c4b68410ee39 / 47c13a26ef585fbb0d93f5593f8f711f / 8ce664df74d422a570ed97cc9cffc2bf | palm trunks |
+
+Generated procedurally in-canvas (no external assets, no licenses): palm canopy silhouette, naga finial cones, bas-relief bump band (`AngkorWorld.tsx`).
+
+---
+
 ## Also downloaded (staging copies in `assets-src/`, not shipped)
 
 Kept for provenance/inspection only — none of these are referenced by the film:

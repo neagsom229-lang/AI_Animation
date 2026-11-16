@@ -31,6 +31,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { buildWorld, type PropPlacement, type WorldLayout } from '../lib/set-dressing.ts';
+import { AngkorWorld } from './AngkorWorld';
 
 /** Resolved mood preset (see src/render/moods.js). */
 export interface MoodPreset {
@@ -46,15 +47,16 @@ export interface SceneWorldProps {
   world: string;
 }
 
-/** Exponential fog density — light enough to keep the temple crisp. */
-const FOG_DENSITY = 0.012;
+/** Exponential fog density — hazy depth without washing the prangs out. */
+const FOG_DENSITY = 0.010;
 
 /** Ground plane size and texture tiling. */
 const GROUND_SIZE = 600;
 const GROUND_REPEAT = 150;
 
-/** Sun position: behind-left of the temple, so shadows rake toward camera. */
-const SUN_POSITION: [number, number, number] = [-20, 14, -34];
+/** Sun position: low behind-left of the temple — golden-hour elevation ~16°,
+ *  shadows rake long toward the camera. */
+const SUN_POSITION: [number, number, number] = [-22, 10.5, -34];
 
 /**
  * Warm-sand multiplier for every prop material (Goal 3 palette re-grade).
@@ -261,6 +263,24 @@ const SunGlow: React.FC<{ layout: WorldLayout }> = ({ layout }) => {
   );
 };
 
+/** Phase 2 afterglow behind the prangs (opacity-capped, art direction §2). */
+const AngkorGlow: React.FC = () => {
+  const texture = React.useMemo(() => makeGlowTexture(), []);
+  return (
+    <sprite position={[0, 20, -52]} scale={[34, 22, 1]}>
+      <spriteMaterial
+        map={texture}
+        color="#ffdfae"
+        transparent
+        opacity={0.16}
+        fog={false}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </sprite>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // One placed prop: load once (suspense cache), clone per instance
 // ---------------------------------------------------------------------------
@@ -323,6 +343,22 @@ const PropInstance: React.FC<PropPlacement & { renderOrder: number }> = ({
 export const SceneWorld: React.FC<SceneWorldProps> = ({ preset, world }) => {
   // Pure function → identical layout every render of the same world.
   const layout = React.useMemo(() => buildWorld(world), [world]);
+
+  if (world === 'khmer-temple') {
+    // Phase 2: Angkor Wat set — moat, causeway, gopura, three galleries,
+    // five prangs, instanced colonnade + palms, ground mist, birds.
+    return (
+      <>
+        <fogExp2 attach="fog" args={[preset.fog, FOG_DENSITY]} />
+        <Sky hdrUrl={staticFile('textures/qwantani_sunset_puresky_1k.hdr')} />
+        <Sun preset={preset} />
+        <AngkorWorld />
+        {/* Soft pre-dawn afterglow behind the prangs — capped at 0.16 so it
+            never reads as a nuclear flash. */}
+        <AngkorGlow />
+      </>
+    );
+  }
 
   return (
     <>
