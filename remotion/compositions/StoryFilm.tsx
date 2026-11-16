@@ -110,12 +110,15 @@ export interface StoryFilmProps {
   voiceData?: any;
   /** Set by make.mjs in --mock mode; stamps a visible MOCK VOICE label. */
   isMock?: boolean;
+  /** Set by make.mjs in --draft mode: 720p layout, low shadows, no post. */
+  isDraft?: boolean;
 }
 
 export const StoryFilm: React.FC<StoryFilmProps> = ({
   story,
   voiceData,
-  isMock
+  isMock,
+  isDraft
 }) => {
   const { fps } = useVideoConfig();
 
@@ -156,8 +159,21 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
   const subtitleLanguage = (voiceData && voiceData.language) || (story && story.language) || 'km';
   const subtitleFont = getSubtitleFont(subtitleLanguage);
 
+  // Draft mode lays the film out at the final 1920×1080 coordinates and
+  // renders the whole thing scaled — layout math never diverges between
+  // draft and final, only the rasteriser workload does.
+  const rootScale = isDraft ? 720 / 1080 : 1;
+
   return (
-    <AbsoluteFill style={{ backgroundColor: '#000' }}>
+    <AbsoluteFill
+      style={{
+        backgroundColor: '#000',
+        width: 1920,
+        height: 1080,
+        transform: `scale(${rootScale})`,
+        transformOrigin: 'top left',
+      }}
+    >
       {/* @font-face for the bundled Khmer caption font (Hanuman, SIL OFL 1.1
           — downloaded from Google Fonts, see CREDITS.md). font-display:block
           plus the delayRender gate above keeps captions out of fallback
@@ -224,13 +240,15 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
               subtitleFont={subtitleFont}
               characters={story.characters || []}
               world={story.world}
+              draft={Boolean(isDraft)}
             />
           </Sequence>
         );
       })}
 
       {/* Cinematic vignette: darkens the corners of every shot (above the 3D
-          layer, below the subtitles). */}
+          layer, below the subtitles). Skipped in draft. */}
+      {!isDraft && (
       <AbsoluteFill
         style={{
           pointerEvents: 'none',
@@ -239,6 +257,7 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
             'radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.38) 100%)'
         }}
       />
+      )}
     </AbsoluteFill>
   );
 };
@@ -253,6 +272,8 @@ interface SceneRendererProps {
   characters: any[];
   /** Optional world name from the story JSON (e.g. "khmer-temple"). */
   world?: string;
+  /** Draft mode: 720p raster, low shadows, no post overlays. */
+  draft?: boolean;
 }
 
 const SceneRenderer: React.FC<SceneRendererProps> = ({
@@ -263,7 +284,8 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   fps,
   subtitleFont,
   characters,
-  world
+  world,
+  draft
 }) => {
   // Frames inside a <Sequence> are LOCAL to that sequence.
   const frame = useCurrentFrame();
@@ -314,15 +336,15 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   return (
     <AbsoluteFill>
       <ThreeCanvas
-        width={1920}
-        height={1080}
+        width={draft ? 1280 : 1920}
+        height={draft ? 720 : 1080}
         shadows
         gl={{ toneMapping: THREE.ACESFilmicToneMapping, outputColorSpace: THREE.SRGBColorSpace }}
       >
         {world ? (
           // Phase C: fully dressed world (HDRI sky, sun + shadows, PBR ground,
           // temple, pond, seeded scatter) — it owns fog and the lights.
-          <SceneWorld preset={preset} world={world} />
+          <SceneWorld preset={preset} world={world} quality={draft ? 'draft' : 'final'} />
         ) : (
           <>
             <color attach="background" args={[preset.fog]} />
@@ -412,8 +434,9 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
           rim); over-the-shoulder shots get a gentler one that softens the
           listener's foreground shoulder without losing the speaker.
           True circle-of-confusion DoF draws black in this pipeline
-          (verified), so this deterministic backdrop blur is used. */}
-      {(spec.shot === 'wide' || spec.shot === 'over-shoulder') && (
+          (verified), so this deterministic backdrop blur is used.
+          Skipped in draft (backdrop-filter is compositor-expensive). */}
+      {!draft && (spec.shot === 'wide' || spec.shot === 'over-shoulder') && (
         <AbsoluteFill
           style={{
             pointerEvents: 'none',
@@ -487,14 +510,16 @@ export const calculateStoryMetadata = ({ props }: { props: Record<string, any> }
   if (!props.story) {
     throw new Error('StoryFilm requires inputProps.story.');
   }
-  // Total duration = sum of real decoded voice durations + inter-scene padding.
+  // Recompute the timeline for the metadata frames (pure function of props).
   const timeline = buildStoryTimeline(props.voiceData, 30);
   const fps = 30;
+  // Draft rasters at half resolution.
+  const draft = Boolean(props.isDraft);
   return {
     durationInFrames: Math.max(1, timeline.durationInFrames),
     fps,
-    width: 1920,
-    height: 1080,
+    width: draft ? 1280 : 1920,
+    height: draft ? 720 : 1080,
     props
   };
 };

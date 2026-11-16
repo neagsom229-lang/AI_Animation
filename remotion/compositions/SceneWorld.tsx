@@ -45,6 +45,8 @@ export interface SceneWorldProps {
   preset: MoodPreset;
   /** World name from the story JSON, e.g. "khmer-temple". */
   world: string;
+  /** 'draft' drops shadow resolution and normal maps for iteration speed. */
+  quality?: 'draft' | 'final';
 }
 
 /** Exponential fog density — hazy depth without washing the prangs out. */
@@ -92,7 +94,7 @@ const Sky: React.FC<{ hdrUrl: string }> = ({ hdrUrl }) => {
 // Lights
 // ---------------------------------------------------------------------------
 
-const Sun: React.FC<{ preset: MoodPreset }> = ({ preset }) => (
+const Sun: React.FC<{ preset: MoodPreset; quality?: 'draft' | 'final' }> = ({ preset, quality }) => (
   <>
     {/* Warm fill from the mood preset; the HDRI environment supplies the rest.
         Kept low on purpose: ambient + sun + image-based lighting stack, and
@@ -103,8 +105,8 @@ const Sun: React.FC<{ preset: MoodPreset }> = ({ preset }) => (
       intensity={preset.intensity * 1.05}
       position={SUN_POSITION}
       castShadow
-      shadow-mapSize-width={2048}
-      shadow-mapSize-height={2048}
+      shadow-mapSize-width={quality === 'draft' ? 512 : 2048}
+      shadow-mapSize-height={quality === 'draft' ? 512 : 2048}
       shadow-camera-left={-35}
       shadow-camera-right={35}
       shadow-camera-top={35}
@@ -340,7 +342,7 @@ const PropInstance: React.FC<PropPlacement & { renderOrder: number }> = ({
 // World root
 // ---------------------------------------------------------------------------
 
-export const SceneWorld: React.FC<SceneWorldProps> = ({ preset, world }) => {
+export const SceneWorld: React.FC<SceneWorldProps> = ({ preset, world, quality }) => {
   // Pure function → identical layout every render of the same world.
   const layout = React.useMemo(() => buildWorld(world), [world]);
 
@@ -351,8 +353,8 @@ export const SceneWorld: React.FC<SceneWorldProps> = ({ preset, world }) => {
       <>
         <fogExp2 attach="fog" args={[preset.fog, FOG_DENSITY]} />
         <Sky hdrUrl={staticFile('textures/qwantani_sunset_puresky_1k.hdr')} />
-        <Sun preset={preset} />
-        <AngkorWorld />
+        <Sun preset={preset} quality={quality} />
+        <AngkorWorld quality={quality} />
         {/* Soft pre-dawn afterglow behind the prangs — capped at 0.16 so it
             never reads as a nuclear flash. */}
         <AngkorGlow />

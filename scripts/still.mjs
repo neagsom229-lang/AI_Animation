@@ -14,8 +14,8 @@
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'node:url';
-import { bundle } from '@remotion/bundler';
 import { renderStill, selectComposition } from '@remotion/renderer';
+import { getOrCreateBundle } from './lib/bundle-cache.mjs';
 
 export function parseArgs(argv) {
   const args = {
@@ -23,6 +23,8 @@ export function parseArgs(argv) {
     frames: '30',
     tag: 'still',
     voice: 'public/voice.json',
+    draft: false,
+    gl: undefined,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -30,6 +32,8 @@ export function parseArgs(argv) {
     else if (a === '--frames' && argv[i + 1]) args.frames = argv[++i];
     else if (a === '--tag' && argv[i + 1]) args.tag = argv[++i];
     else if (a === '--voice' && argv[i + 1]) args.voice = argv[++i];
+    else if (a === '--draft') args.draft = true;
+    else if (a === '--gl' && argv[i + 1]) args.gl = argv[++i];
     else throw new Error(`Unknown or incomplete argument: ${a}`);
   }
   const frames = args.frames.split(',').map((s) => {
@@ -53,13 +57,19 @@ async function main() {
     );
   }
   const voiceData = JSON.parse(fs.readFileSync(voicePath, 'utf-8'));
-  const inputProps = { story, voiceData, isMock: false };
+  const inputProps = { story, voiceData, isMock: false, isDraft: args.draft };
   const browserExecutable = process.env.CHROME || undefined;
+  // --gl selects Chromium's GL backend (angle | swiftshader | ...) — used to
+  // probe the full-Chrome hardware path; omit for Remotion's default.
+  const glMode = args.gl && args.gl !== 'default' ? args.gl : undefined;
+  console.log(`[still] GL backend: ${glMode ?? 'default (Chrome decides)'}`);
 
   console.log(`[still] Bundling Remotion project...`);
-  const bundled = await bundle({
-    entryPoint: path.resolve('./remotion/index.ts'),
+  const { serveUrl: bundled } = await getOrCreateBundle({
+    root: process.cwd(),
+    cacheFile: path.resolve('./out/.bundle-cache.json'),
     publicDir: path.resolve('./public'),
+    entryPoint: path.resolve('./remotion/index.ts'),
   });
   const composition = await selectComposition({
     serveUrl: bundled,
@@ -80,6 +90,8 @@ async function main() {
       output: out,
       frame,
       inputProps,
+      timeoutInMilliseconds: 60000,
+      ...(glMode ? { gl: glMode } : {}),
       ...(browserExecutable ? { browserExecutable } : {}),
     });
     console.log(`[still] wrote ${out}`);

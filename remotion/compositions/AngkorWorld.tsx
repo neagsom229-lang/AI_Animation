@@ -1,15 +1,15 @@
-/**
+﻿/**
  * @fileoverview The Angkor Wat set (Phase 2): moat + causeway + gopura + three
  * gallery tiers + five lotus-bud prangs + instanced colonnades/palms, built
  * entirely from the pure layout in remotion/lib/angkor.ts.
  *
  * Determinism: everything static is derived from the layout module; the only
  * frame-driven motion is (a) the water ripple normal scroll and (b) the mist
- * drift and (c) the birds — all pure functions of `useCurrentFrame()`.
+ * drift and (c) the birds â€” all pure functions of `useCurrentFrame()`.
  * No Math.random, no wall-clock, no useFrame.
  *
  * Performance: columns, stair treads, naga finials and palms are
- * `<instancedMesh>` — the whole set is a few dozen draw calls.
+ * `<instancedMesh>` â€” the whole set is a few dozen draw calls.
  * @module remotion/compositions/AngkorWorld
  */
 
@@ -42,7 +42,7 @@ const makeCanvas = (w: number, h: number, draw: (ctx: CanvasRenderingContext2D) 
 
 /**
  * Procedural bas-relief band: a row of rosette faces between vertical
- * fluting — read from a distance as a carved tympanum, not as noise.
+ * fluting â€” read from a distance as a carved tympanum, not as noise.
  */
 function makeBasReliefBump(): THREE.CanvasTexture {
   return makeCanvas(512, 64, (ctx) => {
@@ -208,21 +208,22 @@ const useInstanced = (count: number, place: (dummy: THREE.Object3D, i: number) =
 // Prang (lotus-bud tower)
 // ---------------------------------------------------------------------------
 
-const Prang: React.FC<{ position: Vec3; height: number; radius: number; mats: AngkorMaps }> = ({
+const Prang: React.FC<{ position: Vec3; height: number; radius: number; mats: AngkorMaps; draft?: boolean }> = ({
   position,
   height,
   radius,
   mats,
+  draft = false,
 }) => {
   const corbelMat = React.useMemo(
     () =>
       new THREE.MeshStandardMaterial({
         map: mats.mossDiff,
-        normalMap: mats.mossNor,
+        normalMap: draft ? null : mats.mossNor,
         roughnessMap: mats.mossRough,
         color: '#8e867a',
         roughness: 1,
-        bumpMap: mats.mossNor,
+        bumpMap: draft ? null : mats.mossNor,
         bumpScale: 0.02,
       }),
     [mats]
@@ -231,7 +232,7 @@ const Prang: React.FC<{ position: Vec3; height: number; radius: number; mats: An
     () =>
       new THREE.MeshStandardMaterial({
         map: mats.wallDiff,
-        normalMap: mats.wallNor,
+        normalMap: draft ? null : mats.wallNor,
         roughnessMap: mats.wallRough,
         color: '#857a6a',
         roughness: 0.95,
@@ -287,11 +288,13 @@ const Prang: React.FC<{ position: Vec3; height: number; radius: number; mats: An
 // The world
 // ---------------------------------------------------------------------------
 
-export const AngkorWorld: React.FC = () => {
+export const AngkorWorld: React.FC<{ quality?: 'draft' | 'final' }> = ({ quality }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = frame / fps;
   const layout = React.useMemo(() => buildAngkorLayout(), []);
+  // Draft mode: drop normal maps (they are the priciest fragment work).
+  const draft = quality === 'draft';
 
   const maps: AngkorMaps = {
     wallDiff: useTex('old_sandstone_02_diff_1k.jpg', [4, 1.6], true),
@@ -341,7 +344,7 @@ export const AngkorWorld: React.FC = () => {
     () =>
       new THREE.MeshStandardMaterial({
         map: maps.grassDiff,
-        normalMap: maps.grassNor,
+        normalMap: draft ? null : maps.grassNor,
         roughnessMap: maps.grassRough,
         color: '#49563e',
         roughness: 1,
@@ -353,7 +356,7 @@ export const AngkorWorld: React.FC = () => {
     () =>
       new THREE.MeshStandardMaterial({
         map: maps.lateriteDiff,
-        normalMap: maps.lateriteNor,
+        normalMap: draft ? null : maps.lateriteNor,
         roughnessMap: maps.lateriteRough,
         color: '#bfb0a0',
         roughness: 1,
@@ -364,7 +367,7 @@ export const AngkorWorld: React.FC = () => {
     () =>
       new THREE.MeshStandardMaterial({
         map: maps.blockDiff,
-        normalMap: maps.blockNor,
+        normalMap: draft ? null : maps.blockNor,
         roughnessMap: maps.blockRough,
         color: '#8f867a',
         roughness: 1,
@@ -375,9 +378,9 @@ export const AngkorWorld: React.FC = () => {
     () =>
       new THREE.MeshStandardMaterial({
         map: maps.wallDiff,
-        normalMap: maps.wallNor,
+        normalMap: draft ? null : maps.wallNor,
         roughnessMap: maps.wallRough,
-        bumpMap: basRelief,
+        bumpMap: draft ? null : basRelief,
         bumpScale: 2.6,
         color: '#8e867a',
         roughness: 0.98,
@@ -388,7 +391,7 @@ export const AngkorWorld: React.FC = () => {
     () =>
       new THREE.MeshStandardMaterial({
         map: maps.mossDiff,
-        normalMap: maps.mossNor,
+        normalMap: draft ? null : maps.mossNor,
         roughnessMap: maps.mossRough,
         color: '#66744f',
         roughness: 1,
@@ -456,7 +459,7 @@ export const AngkorWorld: React.FC = () => {
     () =>
       new THREE.MeshStandardMaterial({
         map: maps.barkDiff,
-        normalMap: maps.barkNor,
+        normalMap: draft ? null : maps.barkNor,
         roughnessMap: maps.barkRough,
         color: '#867768',
         roughness: 1,
@@ -576,7 +579,7 @@ export const AngkorWorld: React.FC = () => {
 
       {/* Five prangs, quincunx */}
       {layout.prangs.map((p) => (
-        <Prang key={p.id} position={p.position} height={p.height} radius={p.radius} mats={maps} />
+        <Prang key={p.id} position={p.position} height={p.height} radius={p.radius} mats={maps} draft={draft} />
       ))}
 
       {/* Colonnades (instanced) */}
@@ -608,3 +611,8 @@ export const AngkorWorld: React.FC = () => {
     </>
   );
 };
+
+
+
+
+

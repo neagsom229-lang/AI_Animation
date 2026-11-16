@@ -10,12 +10,20 @@
  *   node scripts/make.mjs --story src/stories/khmer-temple.json --gpu
  *
  * --gpu renders with Remotion's `gl: 'angle'` (hardware ANGLE/GPU) for
- * production. The default stays software GL, which is what
- * scripts/verify-determinism.mjs relies on for its byte-identical check.
- * Both modes print ms/frame after the render.
+ * production. NOTE: Remotion renders with its bundled chrome-headless-shell,
+ * which only speaks SwiftShader — set CHROME to a full Chrome/Edge install to
+ * actually reach hardware ANGLE (Intel/NVIDIA/AMD). The default stays software
+ * GL, which is what scripts/verify-determinism.mjs relies on for its
+ * byte-identical check. Both modes print ms/frame after the render.
+ *
+ * --draft renders 720p with low shadows and no post overlays for iteration;
+ * final quality stays 1080p. The bundle is cached between runs
+ * (out/.bundle-cache.json) — delete it to force a rebuild.
  *
  * Flow: story JSON -> edge-tts voice (or --mock) -> voice.json (real durations
  * + 20 Hz envelopes) -> Remotion render -> out/<story>.mp4 + contact sheet.
+ * --draft renders 720p to out/<story>-draft.mp4 (+ <story>-draft-contact.png)
+ * so it never clobbers the shipped 1080p artifact.
  * There is NO automatic mock fallback: if real TTS fails, the script exits 1.
  */
 
@@ -23,8 +31,8 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'node:url';
-import { bundle } from '@remotion/bundler';
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer';
+import { getOrCreateBundle } from './lib/bundle-cache.mjs';
 import { validateStory, KNOWN_LANGUAGES } from '../src/core/story.js';
 import { buildSrt } from './lib/srt.mjs';
 import {
@@ -42,6 +50,7 @@ export function parseArgs(argv) {
     voice: undefined,
     mock: false,
     gpu: false,
+    draft: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -50,6 +59,7 @@ export function parseArgs(argv) {
     else if (a === '--voice' && argv[i + 1]) { args.voice = argv[++i]; }
     else if (a === '--mock') { args.mock = true; }
     else if (a === '--gpu') { args.gpu = true; }
+    else if (a === '--draft') { args.draft = true; }
     else { throw new Error(`Unknown or incomplete argument: ${a}`); }
   }
   if (!KNOWN_LANGUAGES.includes(args.lang)) {
@@ -66,7 +76,7 @@ async function main() {
   const { story: storyPath, lang, mock } = args;
   const voice = args.voice || (lang === 'en' ? 'en-US-AriaNeural' : 'km-KH-PisethNeural');
 
-  console.log(`[Kuanimation Studio] Making film from story: ${storyPath} (lang: ${lang}, voice: ${voice}, mock: ${mock})`);
+  console.log(`[Kuanimation Studio] Making film from story: ${storyPath} (lang: ${lang}, voice: ${voice}, mock: ${mock}, draft: ${args.draft})`);
 
   // Validate the story BEFORE spending any time on TTS/render.
   const story = JSON.parse(fs.readFileSync(storyPath, 'utf-8'));
@@ -125,7 +135,7 @@ async function main() {
   }
   console.log('[Assert] Voice generation assertions passed successfully.');
 
-  const inputProps = { story, voiceData, isMock: mock };
+  const inputProps = { story, voiceData, isMock: mock, isDraft: args.draft };
 
   // Chrome/Edge selection: set CHROME to a browser executable to override
   // Remotion's auto-detection (Remotion otherwise uses its bundled headless
@@ -137,11 +147,14 @@ async function main() {
   const glLabel = args.gpu ? 'angle (GPU)' : 'software (default)';
   console.log(`[Perf] GL backend for this run: ${glLabel}`);
 
-  // Step 2: Bundle Remotion project
+  // Step 2: Bundle Remotion project (reused across runs when inputs are
+  // unchanged — see scripts/lib/bundle-cache.mjs)
   console.log('[2/4] Bundling Remotion project...');
-  const bundled = await bundle({
-    entryPoint: path.resolve('./remotion/index.ts'),
+  const { serveUrl: bundled } = await getOrCreateBundle({
+    root: process.cwd(),
+    cacheFile: path.resolve('./out/.bundle-cache.json'),
     publicDir: path.resolve('./public'),
+    entryPoint: path.resolve('./remotion/index.ts'),
   });
 
   // Step 3: Select composition and render media with inputProps
@@ -156,7 +169,9 @@ async function main() {
   const storyName = path.basename(storyPath, '.json');
   const outDir = path.resolve('./out');
   fs.mkdirSync(outDir, { recursive: true });
-  const outSuffix = mock ? '-MOCK.mp4' : '.mp4';
+  // Draft renders go to <story>-draft.mp4 so they never clobber the shipped
+  // final render at <story>.mp4 (the draft's purpose is a fast iteration loop).
+  const outSuffix = mock ? '-MOCK.mp4' : args.draft ? '-draft.mp4' : '.mp4';
   const outVideoPath = path.join(outDir, `${storyName}${outSuffix}`);
 
   const renderStart = Date.now();
@@ -166,6 +181,15 @@ async function main() {
     codec: 'h264',
     outputLocation: outVideoPath,
     inputProps,
+    // Generous page-load budget: on this VM the first frame lands ~30 s
+    // after a cold bundle build; the margin absorbs CPU contention, it does
+    // not mask logic errors.
+    timeoutInMilliseconds: 60000,
+    // This VM has ~3.6 GB free RAM after OS + tooling; Remotion's default
+    // concurrency (half the cores = 8) spawns enough Chromium tabs to OOM
+    // them and they die mid-render, stalling the frame counter.
+    // Four tabs keep the run stable with headroom.
+    concurrency: 4,
     ...(glMode ? { gl: glMode } : {}),
     ...(browserExecutable ? { browserExecutable } : {}),
     onProgress: ({ progress }) => {
@@ -194,7 +218,7 @@ async function main() {
   const contactFrames = pickContactFrames(composition.durationInFrames, CONTACT_FRAME_COUNT);
   const stillsDir = path.join(outDir, `.contact-${storyName}`);
   fs.mkdirSync(stillsDir, { recursive: true });
-  const contactSheetPath = path.join(outDir, `${storyName}-contact.png`);
+  const contactSheetPath = path.join(outDir, `${storyName}${args.draft ? '-draft' : ''}-contact.png`);
   let sheet;
   try {
     const inputs = [];
@@ -207,6 +231,7 @@ async function main() {
         frame,
         imageFormat: 'png',
         inputProps,
+        timeoutInMilliseconds: 60000,
         ...(glMode ? { gl: glMode } : {}),
         ...(browserExecutable ? { browserExecutable } : {}),
       });
