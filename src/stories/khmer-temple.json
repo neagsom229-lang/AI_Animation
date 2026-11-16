@@ -6,7 +6,7 @@
   "language": "km",
   "world": "khmer-temple",
   "characters": [
-    { "id": "reach", "name": "បុត្រា រាជ", "role": "ជាងចម្លាក់", "modelUrl": "public/models/characters/casual_male.glb", "vrmUrl": "public/models/characters/Vivi.vrm", "vrmScale": 1.27 },
+    { "id": "reach", "name": "បុត្រា រាជ", "role": "ជាងចម្លាក់", "modelUrl": "public/models/characters/casual_male.glb", "vrmUrl": "public/models/characters/Vivi.vrm", "vrmScale": 1.22 },
     { "id": "minea", "name": "នាង មីនា", "role": "អ្នកស្រាវជ្រាវ", "modelUrl": "public/models/characters/casual_female.glb", "vrmUrl": "public/models/characters/Vita.vrm", "vrmScale": 1 }
   ],
   "scenes": [
