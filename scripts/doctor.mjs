@@ -148,6 +148,39 @@ function main() {
     }
   }
 
+  // 6. Optional Azure Speech check — only when both env vars are present.
+  //    Never logs the key. A missing env pair is an INFO, not a failure.
+  const azureKey = process.env.AZURE_SPEECH_KEY;
+  const azureRegion = process.env.AZURE_SPEECH_REGION;
+  if (azureKey && azureRegion) {
+    const hasAzureSdk = spawnSync('python', ['-c', 'import azure.cognitiveservices.speech'], { encoding: 'utf8' });
+    if (hasAzureSdk.status !== 0) {
+      record('Azure Speech (env configured)', false,
+        'AZURE_SPEECH_KEY + REGION present but azure-cognitiveservices-speech not importable',
+        'python -m pip install azure-cognitiveservices-speech');
+    } else {
+      // Live synthesis to a temp file (no key printed); km-KH voice if available.
+      const probe = [
+        'import os, tempfile;',
+        'from azure.cognitiveservices.speech import SpeechConfig, SpeechSynthesizer, AudioConfig;',
+        'c=SpeechConfig(subscription=os.environ["AZURE_SPEECH_KEY"], region=os.environ["AZURE_SPEECH_REGION"]);',
+        'c.speech_recognition_language="km-KH";',
+        'f=tempfile.NamedTemporaryFile(suffix=".wav", delete=False); f.close();',
+        'c.synthesis.audio_format="wav";',
+        's=SpeechSynthesizer(speech_config=c, audio_config=AudioConfig(filename=f.name));',
+        'r=s.speak_text_async("សួស្តី").get();',
+        'import os as o; print("OK" if o.path.getsize(f.name)>1000 else "EMPTY"); o.unlink(f.name)',
+      ].join('\n');
+      const az = spawnSync('python', ['-c', probe], { encoding: 'utf8', timeout: 60000 });
+      const azOk = az.status === 0 && /OK/.test(az.stdout || '');
+      record('Azure Speech live call (env configured)', azOk,
+        azOk ? 'synthesized a 1-word Khmer WAV' : `exit ${az.status}; ${((az.stderr || az.stdout || '').trim().split('\n').pop() || 'no output')}`,
+        azOk ? '' : 'Check AZURE_SPEECH_KEY / AZURE_SPEECH_REGION and network; key is never logged.');
+    }
+  } else {
+    console.log('[INFO] Azure Speech check skipped (AZURE_SPEECH_KEY / AZURE_SPEECH_REGION not both set).');
+  }
+
   const failures = results.filter((r) => !r.ok);
   console.log('');
   if (failures.length > 0) {
