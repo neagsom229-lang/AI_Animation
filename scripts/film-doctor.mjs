@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, configHash } from './lib/film-config.mjs';
 import { checkIllustratedAssets } from './illustrated-manifest.mjs';
-import { buildImageRecords, groupDuplicates, requeueBlock } from './lib/film-duplicates.mjs';
+import { buildImageRecords, groupDuplicates, requeueBlock, inlineRequeueHint, requeueTargets } from './lib/film-duplicates.mjs';
 import { isManifestEntryReady, REQUIRED_MANIFEST_FIELDS, REQUIRED_MANIFEST_FLAGS, sourceResolutionGate } from './lib/image-check.mjs';
 
 const ROOT = process.cwd();
@@ -59,7 +59,7 @@ export function runGates({ cfg, story, allowMissing = false }) {
     // Final render blocks; drafts (--allow-missing) only warn and continue.
     add('duplicates', allowMissing ? 'SKIP' : 'BLOCK',
       `${groups.length} duplicate group(s): ${groups.map((g) => g.map((r) => r.scene).join('=')).join('; ')}${allowMissing ? ' (draft: warn only)' : ''}`,
-      `Regenerate distinct images. REQUEUE:\n${groups.map(requeueBlock).join('\n\n')}`);
+      `Regenerate distinct images. ${inlineRequeueHint(groups)}\nFull requeue (narration + prompt):\n${groups.map(requeueBlock).join('\n\n')}`);
     if (!allowMissing) return gates; // stop at first blocker
   } else {
     add('duplicates', 'PASS', `${records.length} unique image(s)`);

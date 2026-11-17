@@ -134,6 +134,19 @@ export function groupDuplicates(records, threshold = 10) {
 }
 
 /**
+ * Scenes to REQUEUE = all but the first (kept) member of each duplicate group.
+ * The first scene in a group is retained; the rest must be regenerated.
+ * Returns flat records with scene number, narration, prompt.
+ */
+export function requeueTargets(groups) {
+  const out = [];
+  for (const g of groups || []) {
+    for (const r of g.slice(1)) out.push(r);
+  }
+  return out;
+}
+
+/**
  * Render a paste-ready requeue block for a duplicate group.
  * Each line: scene number + narration + prompt from docs/ILLUSTRATION_PROMPTS.md.
  */
@@ -148,4 +161,20 @@ export function requeueBlock(group) {
   }
   lines.push('  ACTION: regenerate a DISTINCT image per scene, then: node scripts/film.mjs ingest');
   return lines.join('\n');
+}
+
+/**
+ * Round 12 item 2: compact INLINE requeue hint for the doctor FIX line.
+ * Lists ONLY the scenes to regenerate (all but the first per group) with a
+ * short narration+prompt excerpt, so the FIX line is never an empty "REQUEUE:".
+ */
+export function inlineRequeueHint(groups) {
+  const targets = requeueTargets(groups);
+  if (targets.length === 0) return 'REQUEUE: none';
+  const items = targets.map((r) => {
+    const nar = r.narration ? ` narration="${r.narration.slice(0, 60)}${r.narration.length > 60 ? '…' : ''}"` : '';
+    const pr = r.prompt ? ` prompt="${r.prompt.slice(0, 60)}${r.prompt.length > 60 ? '…' : ''}"` : '';
+    return `scene ${r.scene}${nar}${pr}`;
+  });
+  return `REQUEUE (regenerate only these ${targets.length}): ${items.join(' | ')} — prompt from docs/ILLUSTRATION_PROMPTS.md`;
 }
