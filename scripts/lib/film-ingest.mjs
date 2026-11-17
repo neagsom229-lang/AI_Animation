@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mapFilenames, missingScenes } from './film-map.mjs';
 import { hashInputs } from './film-graph.mjs';
-import { isUpscaled, sourceResolutionGate } from './image-check.mjs';
+import { isUpscaled, sourceResolutionGate, aspectCropPercent } from './image-check.mjs';
 import { imageToGray32, perceptualHash } from './film-duplicates.mjs';
 
 /** Probe an image with Remotion ffprobe (returns width/height/pix_fmt). */
@@ -29,13 +29,14 @@ function requireSpawn(cmd, args) {
     maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
-/** Quality warnings for an image (does not reject — intake normalizes). */
+/** Quality warnings for an image (final render warns; intake normalizes with a logged crop). */
 export function qualityWarnings({ width, height, pixFmt }, cfg) {
   const w = [];
   const ratio = width / height;
   const target = 16 / 9;
   if (!(Math.abs(ratio - target) / target <= cfg.quality.aspectTolerance)) {
-    w.push(`aspect ${ratio.toFixed(3)} outside 16:9 ±${(cfg.quality.aspectTolerance * 100).toFixed(0)}% — will crop`);
+    const crop = aspectCropPercent(width, height);
+    w.push(`aspect ${ratio.toFixed(3)} outside 16:9 ±${(cfg.quality.aspectTolerance * 100).toFixed(0)}% — final-render WARNING: crops ${crop.percent}% ${crop.axis} (quality unverified)`);
   }
   if (width < cfg.quality.minWidth || height < cfg.quality.minHeight) {
     w.push(`${width}x${height} below ${cfg.quality.minWidth}x${cfg.quality.minHeight} — will upscale (quality unverified)`);
@@ -85,7 +86,14 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
     const q = probeImage(src);
     const warns = qualityWarnings(q, cfg);
     if (warns.length) warningsByScene[m.scene] = warns;
-    sourceByScene[m.scene] = { sourceWidth: q.width, sourceHeight: q.height, upscaled: isUpscaled(q.width, cfg.resolutions.master[0]) };
+    const cropInfo = aspectCropPercent(q.width, q.height);
+    sourceByScene[m.scene] = {
+      sourceWidth: q.width, sourceHeight: q.height,
+      sourceAspect: Number((q.width / q.height).toFixed(4)),
+      aspectCropPercent: cropInfo.percent,
+      aspectCropAxis: cropInfo.axis,
+      upscaled: isUpscaled(q.width, cfg.resolutions.master[0]),
+    };
     // Perceptual hash of the SOURCE image (exact SHA-256 is written by intake on the normalized copy).
     try {
       hashByScene[m.scene] = { sourceSha256: crypto.createHash('sha256').update(fs.readFileSync(src)).digest('hex'),
@@ -126,6 +134,9 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
       if (Number.isFinite(src.sourceWidth)) {
         e.sourceWidth = src.sourceWidth;
         e.sourceHeight = src.sourceHeight;
+        e.sourceAspect = src.sourceAspect;
+        e.aspectCropPercent = src.aspectCropPercent;
+        e.aspectCropAxis = src.aspectCropAxis;
       }
       e.upscaled = prevUpscaled || src.upscaled === true;
       const h = hashByScene[e.scene] || {};

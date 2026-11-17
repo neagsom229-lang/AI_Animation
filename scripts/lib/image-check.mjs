@@ -31,6 +31,30 @@ export function is169(width, height, tol = ASPECT_TOL) {
   return Math.abs(ratio - TARGET_ASPECT) / TARGET_ASPECT <= tol;
 }
 
+/**
+ * Round 12 item 3: percentage of the source that must be CROPPED to reach 16:9.
+ * Intake center-crops to width = height*16/9 (crop sides) when the source is
+ * wider than 16:9, else crops height (crops top/bottom). Returns {axis, percent}
+ * where percent is the fraction of the cropped dimension removed (0..100).
+ */
+export function aspectCropPercent(width, height) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return { axis: 'unknown', percent: 0 };
+  }
+  const ratio = width / height;
+  if (ratio > TARGET_ASPECT) {
+    // Wider than 16:9 -> crop left+right to height*16/9.
+    const targetW = height * TARGET_ASPECT;
+    return { axis: 'horizontal', percent: Number((((width - targetW) / width) * 100).toFixed(2)) };
+  }
+  if (ratio < TARGET_ASPECT) {
+    // Taller -> crop top+bottom to width/(16/9).
+    const targetH = width / TARGET_ASPECT;
+    return { axis: 'vertical', percent: Number((((height - targetH) / height) * 100).toFixed(2)) };
+  }
+  return { axis: 'none', percent: 0 };
+}
+
 /** Does an ffprobe pix_fmt indicate an alpha channel? */
 export function hasAlpha(pixFmt) {
   const p = String(pixFmt || '').toLowerCase();

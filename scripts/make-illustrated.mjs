@@ -145,6 +145,18 @@ export async function main(argv = process.argv.slice(2)) {
     }
     console.log(`[Assert] Source-resolution gate OK (>= ${minSrc}px or draft).`);
 
+    // Round 12 item 3: aspect gate — WARNING with crop percentage (not a blocker).
+    const offAspect = (im.scenes || []).filter((e) =>
+      e.sourceAspect !== undefined && Math.abs(e.sourceAspect - 16 / 9) / (16 / 9) > 0.02);
+    if (offAspect.length) {
+      for (const e of offAspect.slice(0, 6)) {
+        console.log(`[WARN] aspect: scene ${e.scene} source ${e.sourceAspect} not 16:9 ±2% — crops ${e.aspectCropPercent}% ${e.aspectCropAxis} (quality unverified).`);
+      }
+      if (offAspect.length > 6) console.log(`[WARN] aspect: ...and ${offAspect.length - 6} more scene(s).`);
+    } else {
+      console.log('[Assert] Aspect gate OK (all sources 16:9 ±2%).');
+    }
+
     // Round 9 item 2: exact + near-duplicate images are blocking.
     const { buildImageRecords, groupDuplicates, requeueBlock } = await import('./lib/film-duplicates.mjs');
     const promptText = fs.existsSync('docs/ILLUSTRATION_PROMPTS.md') ? fs.readFileSync('docs/ILLUSTRATION_PROMPTS.md', 'utf8') : '';
