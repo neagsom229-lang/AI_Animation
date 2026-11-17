@@ -34,6 +34,9 @@ assets-src/
 public/voice/
 public/voice.json
 public/voice-*.json
+# Staged illustrated scene copies (regenerated from assets-src/illustrations by film preview/render)
+public/illustrated/illustrations/scene-*.png
+public/illustrated/illustrations/*-depth.png
 public/scene*.mp3
 public/*.srt
 test*.mp3
