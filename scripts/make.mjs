@@ -72,6 +72,11 @@ export function parseArgs(argv) {
     software: false,
     draft: false,
     storyboard: false,
+    style: 'auto',
+    vertical: false,
+    minDuration: 120,
+    allowMissing: false,
+    englishSubtitles: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -83,7 +88,15 @@ export function parseArgs(argv) {
     else if (a === '--software') { args.software = true; args.gpu = false; }
     else if (a === '--draft') { args.draft = true; }
     else if (a === '--storyboard') { args.storyboard = true; }
+    else if (a === '--style' && argv[i + 1]) { args.style = argv[++i]; }
+    else if (a === '--vertical') { args.vertical = true; }
+    else if (a === '--min-duration' && argv[i + 1]) { args.minDuration = Number(argv[++i]); }
+    else if (a === '--allow-missing') { args.allowMissing = true; }
+    else if (a === '--english-subtitles') { args.englishSubtitles = true; }
     else { throw new Error(`Unknown or incomplete argument: ${a}`); }
+  }
+  if (!['auto', '3d', 'illustrated'].includes(args.style)) {
+    throw new Error(`--style "${args.style}" is unknown. Valid: auto, 3d, illustrated.`);
   }
   if (!KNOWN_LANGUAGES.includes(args.lang)) {
     throw new Error(`--lang "${args.lang}" is unknown. Valid languages: ${KNOWN_LANGUAGES.join(', ')}.`);
@@ -100,6 +113,26 @@ async function main() {
   const voice = args.voice || (lang === 'en' ? 'en-US-AriaNeural' : 'km-KH-PisethNeural');
 
   console.log(`[Kuanimation Studio] Making film from story: ${storyPath} (lang: ${lang}, voice: ${voice}, mock: ${mock}, draft: ${args.draft})`);
+
+  // Style dispatch: --style illustrated, or auto-detect the illustrated schema.
+  // The 3D style remains the default for all existing stories.
+  const storyForStyle = JSON.parse(fs.readFileSync(storyPath, 'utf-8'));
+  const wantIllustrated =
+    args.style === 'illustrated' || (args.style === 'auto' && storyForStyle.style === 'illustrated');
+  if (wantIllustrated) {
+    const { main: illustratedMain } = await import('./make-illustrated.mjs');
+    const delegated = ['--story', storyPath, '--lang', lang, '--voice', voice];
+    if (mock) delegated.push('--mock');
+    if (args.draft) delegated.push('--draft');
+    if (args.vertical) delegated.push('--vertical');
+    if (args.allowMissing) delegated.push('--allow-missing');
+    if (args.storyboard) delegated.push('--storyboard');
+    if (args.englishSubtitles) delegated.push('--english-subtitles');
+    if (args.software) delegated.push('--software');
+    delegated.push('--min-duration', String(args.minDuration));
+    await illustratedMain(delegated);
+    return;
+  }
 
   // Validate the story BEFORE spending any time on TTS/render.
   const story = JSON.parse(fs.readFileSync(storyPath, 'utf-8'));

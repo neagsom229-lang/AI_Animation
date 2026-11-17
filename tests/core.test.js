@@ -139,6 +139,9 @@ test('every shipped story validates, including its shot vocabulary', () => {
   assert.ok(files.length > 0, 'no story JSON files found in src/stories');
   for (const f of files) {
     const story = JSON.parse(fs.readFileSync(path.join(storiesDir, f), 'utf8'));
+    // Illustrated stories use their own schema (src/core/illustrated-story.js),
+    // validated in tests/illustrated.test.js — skip them here.
+    if (story.style === 'illustrated') continue;
     assert.strictEqual(validateStory(story), true, `${f} failed validation`);
     for (const scene of story.scenes) {
       if (scene.shot !== undefined) {

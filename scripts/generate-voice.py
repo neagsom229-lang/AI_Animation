@@ -215,7 +215,16 @@ def main():
     for scene_idx, scene in enumerate(story.get("scenes", [])):
         scene_id = scene.get("id", f"scene{scene_idx+1}")
         dialogue_list = scene.get("dialogue", [])
-        
+
+        # Illustrated schema: narration = {km, en}. Build one narrator line in
+        # the requested language; the English gloss becomes the subtitle.
+        if not dialogue_list and isinstance(scene.get("narration"), dict):
+            narr = scene["narration"]
+            spoken = narr.get(lang) or narr.get("km") or narr.get("en")
+            gloss = narr.get("en") if lang != "en" else narr.get("km")
+            if spoken:
+                dialogue_list = [{"speaker": "narrator", "text": spoken, "subtitle": gloss or spoken}]
+
         if not dialogue_list:
             if scene.get("silent"):
                 # Silent establishing scene: plays public/voice/k0-silence.mp3
