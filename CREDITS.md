@@ -183,6 +183,26 @@ Kept for provenance/inspection only — none of these are referenced by the film
 - Quaternius *Ultimate Animated Character* source files that were superseded by
   the optimised GLBs above.
 
+## Software dependency licenses (see THIRD_PARTY_LICENSES.md)
+
+The exhaustive, file-quoted license record for every npm dependency, Python
+tool, model and asset is in `THIRD_PARTY_LICENSES.md` (regenerate with
+`node scripts/gen-licenses.mjs`). Note for the rights-holder, quoted from the
+installed files, not interpreted:
+
+- **Remotion 4.0.542** and `@remotion/{bundler,cli,renderer}` declare
+  `SEE LICENSE IN LICENSE.md`; that file states a **two-tier** license
+  ("Individuals and small companies are allowed to use Remotion for free (even
+  commercial), while a company license is required for for-profit organizations
+  of a certain size"). Remotion is **not** MIT/Apache/CC0. Whether a Company
+  License is needed depends on the legal entity and is **not asserted here**.
+- **edge-tts 7.3.1** (build-time TTS tool): its installed LICENSE states
+  "The MIT license is used for 'src/edge_tts/srt_composer.py' only. All remaining
+  files are licensed under the LGPLv3." LGPLv3 is outside the permissive
+  allow-list; flagged, not silently accepted. It is used only as a local
+  command-line tool to synthesize narration, not bundled into the film.
+- **Depth Anything V2 Small**: Apache-2.0 (quoted in §10 below).
+
 ## 10. Illustrated film — depth model & tooling (added on `illustrated` branch)
 
 - **Depth Anything V2 Small** (`depth-anything/Depth-Anything-V2-Small-hf`) —

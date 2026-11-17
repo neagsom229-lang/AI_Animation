@@ -1,0 +1,50 @@
+# Runbook — Kuanimation Studio (one page)
+
+## Daily build (illustrated film)
+
+```powershell
+cd D:\General\Animation\kuanimation-skill
+node scripts/preflight.mjs              # RAM free? stale Chrome to reap?
+node scripts/illustrated-manifest.mjs   # assets present + reviewed:true?
+npm run qa                              # tsc + tests + determinism + gates
+node scripts/make.mjs --story src/stories/khmer-empire.json --style illustrated --min-duration 120
+```
+
+Outputs: `out/publish/khmer-empire/` (masters, SRT, cover, chapters, checksums,
+manifest.json). QA sheets: `out/review/`.
+
+## Gates (a render refuses to proceed if these fail)
+- Missing illustration / depth / music / clip without `--allow-missing`.
+- Any scene with `reviewed !== true` in `assets-src/illustrations/manifest.json`.
+- Manifest fields `tool`, `date`, `prompt`, `licenseTermsUrl` empty.
+- Film shorter than `--min-duration` (default 120 s).
+- `npm run qa` failing (types, tests, determinism, licenses, caption safe area).
+
+## Recovery / crash / OOM
+- Per-scene MP4s are cached in `out/.illustrated-scene-cache/` by content hash;
+  a re-run skips finished scenes (resume). A state file records progress.
+- Stale Remotion Chrome processes are reaped by preflight (`--kill`) and after
+  each render. Free RAM < 4 GB → concurrency drops to 2 automatically.
+- `out/` is gitignored; deleting it forces a cold render.
+
+## Verification
+- `npm run qa` runs all gates (see package.json).
+- `node scripts/verify-determinism.mjs --composition StoryFilm`
+- `node scripts/verify-determinism.mjs --composition IllustratedFilm`
+
+## Asset intake
+1. Generate images from `docs/ILLUSTRATION_PROMPTS.md` (style line verbatim).
+2. `node scripts/intake-illustrations.mjs <folder>` → normalized PNGs + manifest.
+3. Review each against `docs/IMAGE_REVIEW_CHECKLIST.md`; set `reviewed: true`.
+4. `python scripts/depth.py --story src/stories/khmer-empire.json --depth model`.
+
+## Environment
+- `node scripts/setup.mjs` (installs deps into `.venv-depth`, checks Chrome/ffmpeg).
+- `node scripts/doctor.mjs` (live edge-tts call; Azure call if env keys present).
+- Azure TTS (optional): set `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` in the
+  environment only — never commit them (`tests` + `check_secrets.py` enforce).
+
+## Licensing
+Read `THIRD_PARTY_LICENSES.md` (quoted lines). Remotion = two-tier Free/Company
+license; edge-tts = LGPLv3; both flagged for the rights-holder. All shipped
+assets must be CC0/CC-BY/MIT/Apache/BSD/SIL OFL and logged in `CREDITS.md`.

@@ -1,192 +1,120 @@
 # Kuanimation Studio
 
-Professional, frame-deterministic 3D animation and motion graphics studio powered by **Remotion**, **Three.js**, and **AI Agent Skills**.
+A frame-deterministic film factory: turn a story JSON + real Khmer TTS narration
+into a reproducible MP4 with subtitles, and publish masters. Two styles share
+the same pipeline: **3D** (`StoryFilm`, real-time Three.js) and **illustrated**
+(`IllustratedFilm`, painterly 2.5D depth parallax). Software GL is the
+determinism reference; the GPU path is for fast production renders.
 
-Turns a **story JSON + real TTS narration** into a deterministic 3D animated
-**MP4** with lip-synced audio, subtitles, and a contact sheet.
+> Platform: Windows 11 + PowerShell. No `&&` (use `;`), no `pip.exe` (use
+> `python -m pip`), no system ffmpeg (use `npx remotion ffmpeg|ffprobe`).
+> Hardware here: Intel UHD, ~4 GB free RAM of 16 GB.
 
----
-
-## What it does
+## Flow diagram
 
 ```
-story JSON ──► edge-tts voice ──► voice.json (20 Hz RMS envelope)
-                              │
-                              ▼
-                 StoryFilm (Remotion + Three.js)
-                              │
-              ┌───────────┼───────────┐
-              ▼           ▼           ▼
-      out/<story>.mp4   out/<story>.srt   contact sheet
+                          ┌──────────────────────────────────────────┐
+                          │ 1. story JSON  (3d OR illustrated)       │
+                          └───────────────┬──────────────────────────┘
+                                          │
+              ┌───────────────────────────┴────────────────────────────┐
+              │                                                        │
+     ┌────────▼─────────┐                                   ┌──────────▼──────────┐
+     │ 3d: characters   │                                   │ illustrated:        │
+     │ char library     │                                   │ 18 illustrations    │
+     │ + Angkor set     │                                   │ intake → depth →    │
+     └────────┬─────────┘                                   │ manifest (reviewed) │
+              │                                             └──────────┬──────────┘
+              └───────────────────────────┬────────────────────────────┘
+                                          │
+                          ┌───────────────▼──────────────────────────┐
+                          │ 2. voice: edge-tts (km) / azure           │
+                          │    → voice.json (real dur + 20Hz env)     │
+                          └───────────────┬──────────────────────────┘
+                                          │
+                          ┌───────────────▼──────────────────────────┐
+                          │ 3. Remotion composition                   │
+                          │    StoryFilm | IllustratedFilm            │
+                          │    + Hanuman subtitles + year chips        │
+                          └───────────────┬──────────────────────────┘
+                                          │
+              ┌───────────────────────────┴────────────────────────────┐
+              │ per-scene MP4 (content-hash cache) → ffmpeg stitch     │
+              └───────────────────────────┬────────────────────────────┘
+                                          │
+              ┌───────────────────────────▼────────────────────────────┐
+              │ 4. publish pack: 16:9 + 9:16 masters, SRT km/en,       │
+              │    cover, chapters, checksums, manifest.json           │
+              └────────────────────────────────────────────────────────┘
 ```
 
-## Quick start (Windows PowerShell) — 5 commands
+## Ten commands — empty folder to final MP4 (illustrated film)
+
+Run from the repo root in PowerShell. Use the **direct node form** (npm's
+`--flag` passing is unreliable here).
 
 ```powershell
-# 1. Install dependencies
+# 1. Install JS deps
 npm install
 
-# 2. Run the environment doctor (node, python, edge-tts, ffmpeg decode, live TTS)
+# 2. One-command setup (Node/Python venv, deps, Chrome, ffmpeg, RAM preflight)
+node scripts/setup.mjs
+
+# 3. Health check incl. live 1-word edge-tts call
 node scripts/doctor.mjs
 
-# 3. Make a Khmer-language film from the default story
-node scripts/make.mjs --story src/stories/khmer-temple.json
+# 4. Generate the 18 illustration prompts (read docs/ILLUSTRATION_PROMPTS.md)
+#    Then generate the images yourself into a folder, e.g. my-art/
 
-# 4. Make an English film (different voice, subtitle font, subtitle text)
-node scripts/make.mjs --story src/stories/historical-angkor.json --lang en
+# 5. Intake: validate/crop/normalize images -> assets-src/illustrations/scene-XX.png
+#    (writes manifest.json with tool/date/prompt/license URL)
+node scripts/intake-illustrations.mjs my-art
 
-# 5. Verify the deterministic frame contract (render twice, compare hashes)
-npm run verify:determinism
+# 6. Mark each scene reviewed in assets-src/illustrations/manifest.json
+#    (docs/IMAGE_REVIEW_CHECKLIST.md) — final render fails if not reviewed:true
+
+# 7. Generate depth maps (Apache-2.0 model; --depth gradient for labeled fallback)
+python scripts/depth.py --story src/stories/khmer-empire.json --depth model
+
+# 8. Verify environment + determinism before a big render
+npm run qa
+
+# 9. Build the film + publish pack (min 120 s gate; fails loudly if assets missing)
+node scripts/make.mjs --story src/stories/khmer-empire.json --style illustrated --min-duration 120
+
+# 10. Inspect outputs, then the dry-run QA contact sheets
+#     final masters in out/publish/khmer-empire/ ; QA sheets in out/review/
+node scripts/dry-run.mjs --story src/stories/khmer-empire.json
 ```
 
-Outputs land in `out/`:
+Without real assets you can exercise the whole chain with fixtures:
+add `--allow-missing` to command 9 (renders clearly labeled placeholder cards).
 
-- `out/<story>.mp4` — final film (h264, 1920x1080 @ 30 fps)
-- `out/<story>.srt` — subtitles timed from the same voice data as the film
-- `out/<story>-contact.png` — contact sheet: 6 frames evenly spread across the
-  whole film (3x2 grid, first and last frame included)
+## Styles & flags
 
-### Mock mode
+- `--style illustrated` (or auto-detected from `story.style`) → `IllustratedFilm`.
+- `--style 3d` → the original `StoryFilm` (unchanged).
+- `--draft` 720p, `--vertical` 9:16, `--min-duration N` duration gate.
+- `--allow-missing` placeholder cards; `--english-subtitles` opt-in English captions.
+- `--tts edge|azure`, `--rate` pacing (Phase 5); Azure key from env, never in repo.
+- `--software` SwiftShader determinism reference; default render is GPU (`--gpu`).
 
-`node scripts/make.mjs --story <story.json> --mock` uses offline mock TTS and
-stamps a `MOCK VOICE` label on the film. Mock audio uses a `mock-` filename prefix
-and is never reused for real generation.
+## Invariants
 
-### Render path, GPU and RAM (Round 4)
+Frame-pure animation only (`useCurrentFrame`/`useVideoConfig().fps`); no
+`useFrame`, `THREE.Clock`, `performance.now`, `Date.now`, or unseeded
+`Math.random` in compositions — see `docs/INVARIANTS.md`.
 
-`node scripts/make.mjs` renders with the **GPU path by default**:
-`gl: 'angle'` (hardware ANGLE) on a **full Chrome/Edge** install, which is
-auto-detected (`CHROME=<path>` overrides it). Remotion's bundled
-`chrome-headless-shell` only speaks SwiftShader, so it can never reach the
-GPU — "default = software" meant "default = no GPU".
+## Docs
 
-| flag | GL backend | use for |
-|---|---|---|
-| *(none)* | `angle` (GPU) | **production renders** |
-| `--software` | SwiftShader | the determinism reference |
-| `--gpu` | `angle` (GPU) | explicit alias of the default |
+- `docs/RUNBOOK.md` — one-page operator runbook (daily use, recovery, QA gates).
+- `docs/ARCHITECTURE.md`, `docs/INVARIANTS.md`, `docs/ILLUSTRATION_PROMPTS.md`,
+  `docs/IMAGE_REVIEW_CHECKLIST.md`, `docs/ILLUSTRATED_QA.md`.
+- `CREDITS.md` (assets) and `THIRD_PARTY_LICENSES.md` (quoted dependency licenses).
 
-`npm run verify:determinism` is pinned to `gl: 'swiftshader'` on purpose: the
-determinism reference must be the same on every machine.
+## Licensing note (for the rights-holder)
 
-**RAM.** This machine has 16 GB total and ~4–5 GB free, and every Remotion
-tab holds a WebGL context plus the bundle. Four tabs is the proven-stable
-number (`concurrency: 4`, `timeoutInMilliseconds: 60000`).
-
-A pre-flight runs before every render (`scripts/preflight.mjs`):
-
-```powershell
-node scripts/preflight.mjs          # report only
-node scripts/preflight.mjs --kill   # report + reap stale Remotion browsers
-node scripts/preflight.mjs --json   # machine-readable
-```
-
-It prints free RAM, **warns below 4 GB**, picks the concurrency (4 at ≥4 GB,
-2 below it) and kills the headless Chrome processes that *this pipeline*
-started (their command line carries Remotion's user-data-dir marker) — a
-leaked browser holds hundreds of MB and starves the next render. The render
-scripts reap their own browsers again afterwards.
-
-## Story JSON format
-
-Required: `title`, `genre`, `theme`, `characters[]` (≥1), `scenes[]` (≥1).
-Each scene requires `id`, `name`, positive numeric `dur`, and `dialogue[]`; each
-line requires non-empty `text`. Optional per scene: `mood`, `camera`, `shot`,
-`renderer`, `actions`. Optional per story: `language` and `world` — `world`
-names a dressed 3D set (e.g. `"khmer-temple"`); unknown world names are hard
-errors, never a silent substitute set. Optional per story:
-`subtitleLanguage` — the language the CAPTIONS are in (defaults to the
-narration language).
-
-Camera rigs: `dolly`, `dolly-drift` (a slow push-in **plus** a drifting
-bearing and a vertical settle — the two-shot move), `orbit`, `crane`,
-`handheld`, `static`.
-Shot types: `close-up`, `medium`, `wide` (a monument shot aimed at the
-temple), `over-shoulder`.
-
-**Caption language.** The caption text follows the *script* of the caption
-language: with `--lang km` the shipped Khmer story shows the Khmer narration
-line, and the English `subtitle` field (an authored gloss) is used only when
-the caption language is English. Set `"subtitleLanguage": "en"` in the story
-to force English captions under Khmer narration.
-
-```json
-{
-  "title": "Echoes of Angkor",
-  "genre": "historical",
-  "theme": "Rise of water management and great temples",
-  "tone": "epic",
-  "language": "en",
-  "characters": [
-    { "id": "jaya", "name": "King Jayavarman VII", "role": "Builder King" }
-  ],
-  "scenes": [
-    {
-      "id": "s1",
-      "name": "Forest Dawn",
-      "mood": "warm dawn",
-      "dur": 6,
-      "camera": "dolly",
-      "shot": "wide",
-      "renderer": "2d",
-      "actions": [
-        { "character": "jaya", "action": "talk" }
-      ],
-      "dialogue": [
-        { "speaker": "jaya", "text": "In the heart of the great forest, stone temples rise to touch the clouds.", "subtitle": "Stone temples rise in the forest." }
-      ]
-    }
-  ]
-}
-```
-
-Valid moods: `warm dawn`, `gold dust`, `night storm`, `paper`, `green`.
-Valid cameras: `dolly`, `orbit`, `crane`, `handheld`, `static`.
-Valid actions: `idle`, `walk`, `talk`, `turn`, `gesture`, `react`.
-
-Valid shots (per scene — framing from `remotion/lib/camera.ts`, with the rig
-adding the motion on top):
-
-| Shot | Distance | Look-at | Framing |
-|---|---|---|---|
-| `close-up` | 2.5 m | head (y 1.7) | tight on the speaker, ~55% of frame height |
-| `medium` | 4.0 m | head (y 1.7) | the talk shot — speaker holds 40–60% of frame height |
-| `wide` | 11 m | y 3.9 | establishing: horizon on the lower third, temple + sky above |
-| `over-shoulder` | 3.9 m, behind the listener | speaker's head | two-hander; needs ≥2 characters with `modelUrl` (validator enforces) |
-
-`dolly` pushes in along the shot bearing, `orbit` sweeps ±arc around it
-(never behind the set), `crane` rises 2.5 m into the shot height,
-`handheld` adds seeded simplex shake, `static` holds. All poses are pure
-functions of the frame index — no wall-clock, no `Math.random`.
-
-## Adding voices / characters / models
-
-- **Voices:** pass `--voice <edge-tts-voice>` or rely on `--lang km|en`
-  (defaults: `km-KH-PisethNeural`, `en-US-AriaNeural`). Add new voices to
-  `KNOWN_VOICES` in `scripts/generate-voice.py` after verifying with edge-tts.
-- **Characters / models:** add characters to the story; drop a `.glb` into
-  `public/models/` and point the scene at it via the character `modelUrl`.
-
-## Troubleshooting
-
-- **edge-tts 503 / timeouts:** transient. Re-run; `node scripts/doctor.mjs` runs
-  a live 1-word TTS call to confirm.
-- **Blocked executables (`pip.exe`, `ffprobe.exe`, system `ffmpeg`):** use
-  `python -m pip`, Remotion's bundled tools (`npx remotion ffmpeg`,
-  `npx remotion ffprobe`), and `node scripts/<name>.mjs --flag value` instead of
-  `npm run <name> -- --flag value`.
-- **npm flag issue:** `npm run x -- --flag value` may fail with
-  "Unknown cli flag" — always use the direct node form:
-  `node scripts/make.mjs --story <story.json> --lang km`.
-
-## Invariants & docs
-
-- `docs/INVARIANTS.md` — non-negotiable frame-determinism rules.
-- `docs/ARCHITECTURE.md` — pipeline diagram + data contracts.
-
-## Prompting the Agent
-
-Example prompts to generate new scenes:
-- *"Generate a 15-second explainer composition with a crane-down camera move and warm dawn mood."*
-- *"Add a new walking character composition with custom narration and seeded procedural gait."*
-- *"Create a 5-second orbit shot with glowing dust particles and cinematic handheld shake."*
+Remotion is licensed under a two-tier Free/Company license (NOT MIT/Apache/CC0);
+edge-tts is LGPLv3. Both are quoted, not interpreted, in `THIRD_PARTY_LICENSES.md`.
+Confirm the Remotion Company-License question for your entity before commercial
+distribution.
