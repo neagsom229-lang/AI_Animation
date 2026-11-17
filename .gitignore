@@ -22,6 +22,8 @@ __pycache__/
 
 # Generated film output and temporary voice batches
 out/
+# Factory build cache/state/logs/previews (regenerable)
+build/
 **/audio/batch-*.wav
 
 # Raw asset staging (downloads/extracted kits; provenance in CREDITS.md,

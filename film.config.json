@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "story": "src/stories/khmer-empire.json",
+  "fps": 30,
+  "paths": {
+    "inbox": "assets-src/inbox",
+    "originals": "assets-src/inbox/_originals",
+    "illustrations": "assets-src/illustrations",
+    "music": "assets-src/music",
+    "build": "build",
+    "preview": "build/preview",
+    "logs": "build/logs",
+    "state": "build/state.json",
+    "publish": "out/publish"
+  },
+  "resolutions": {
+    "master": [1920, 1080],
+    "draft": [1280, 720],
+    "vertical": [1080, 1920]
+  },
+  "tts": { "provider": "edge", "voice": "km-KH-PisethNeural", "rate": 0 },
+  "depth": { "mode": "gradient", "model": "depth-anything/Depth-Anything-V2-Small-hf" },
+  "concurrency": 2,
+  "gpu": true,
+  "quality": {
+    "aspectTolerance": 0.02,
+    "minWidth": 1920,
+    "minHeight": 1080,
+    "noAlpha": true
+  },
+  "intake": {
+    "tool": "user-provided illustration",
+    "licenseTermsUrl": "",
+    "promptFile": "docs/ILLUSTRATION_PROMPTS.md"
+  },
+  "cost": {
+    "world3dMaxFraction": 0.25,
+    "msPerFrame": { "illustration": 100, "world3d": 1000, "clip": 40 }
+  }
+}
