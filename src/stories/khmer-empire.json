@@ -1,0 +1,284 @@
+{
+  "id": "khmer-empire",
+  "style": "illustrated",
+  "title": "The Khmer Empire",
+  "titleKm": "ចក្រភពខ្មែរ",
+  "genre": "historical",
+  "theme": "The rise, achievement and endurance of the Khmer Empire",
+  "tone": "epic",
+  "language": "km",
+  "subtitleLanguage": "km",
+  "optionalEnglishSubtitles": true,
+  "narratorVoice": "km-KH-PisethNeural",
+  "music": "assets-src/music/ambient.mp3",
+  "sfx": {
+    "water": "assets-src/music/sfx-water.mp3",
+    "wind": "assets-src/music/sfx-wind.mp3",
+    "bells": "assets-src/music/sfx-bells.mp3"
+  },
+  "transitions": {
+    "crossfadeSeconds": 0.6,
+    "dipToBlackSeconds": 0.6
+  },
+  "titleCard": { "text": "The Khmer Empire", "textKm": "ចក្រភពខ្មែរ" },
+  "endCard": { "text": "The Khmer Empire", "textKm": "ចក្រភពខ្មែរ" },
+  "cameraMoves": ["push-in", "push-out", "truck-left", "truck-right", "crane-up", "static"],
+  "fxVocabulary": ["dust", "god-rays", "water", "grass", "smoke", "birds", "fireflies", "grain", "vignette", "fire"],
+  "transitionVocabulary": ["crossfade", "dip-to-black", "none"],
+  "scenes": [
+    {
+      "id": "sc-01",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "Twelve centuries ago, in the heart of Southeast Asia, a kingdom rose that would shape a civilization.",
+        "km": "កាលពីជាងដប់ពីរសតវត្សរ៍មុន នៅចិត្តនៃអាស៊ីអាគ្នេយ៍ មានអាណាចក្រមួយបានកើតឡើង ដែលបានបង្កើតអរិយធម៌ដ៏អស្ចារ្យ។"
+      },
+      "image": "assets-src/illustrations/scene-01.png",
+      "clip": null,
+      "camera": "push-in",
+      "fx": ["dust", "god-rays", "birds", "grain", "vignette"],
+      "transition": "crossfade",
+      "titleCard": true
+    },
+    {
+      "id": "sc-02",
+      "years": "802",
+      "yearChip": "802",
+      "narration": {
+        "en": "In 802, King Jayavarman II proclaimed himself a universal monarch on Mount Kulen, and the Khmer Empire was born.",
+        "km": "នៅឆ្នាំ ៨០២ ព្រះបាទជ័យវរ្ម័នទី ២ ទ្រង់ប្រកាសជាស្តេចចក្រពត្តិនៅលើភ្នំគូលេន ហើយអាណាចក្រខ្មែរក៏កកើតឡើង។"
+      },
+      "image": "assets-src/illustrations/scene-02.png",
+      "clip": null,
+      "camera": "crane-up",
+      "fx": ["dust", "god-rays", "smoke"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-03",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "From early capitals near Roluos, his successors built temples and vast reservoirs called barays.",
+        "km": "ពីរាជធានីដំបូងៗនៅតំបន់រលួស ព្រះរាជាស្នងរាជ្យបន្តបានកសាងប្រាសាទ និងអាងទឹកដ៏ធំៗហៅថា បារាយណ៍។"
+      },
+      "image": "assets-src/illustrations/scene-03.png",
+      "clip": null,
+      "camera": "truck-right",
+      "fx": ["water", "grass"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-04",
+      "years": "889",
+      "yearChip": "889",
+      "narration": {
+        "en": "Around 889, King Yasovarman I founded Yasodharapura, the first city of Angkor.",
+        "km": "ប្រហែលឆ្នាំ ៨៨៩ ព្រះបាទយសោវរ្ម័នទី ១ ទ្រង់បង្កើតក្រុងយសោធរបុរៈ ជាទីក្រុងដំបូងនៃអង្គរ។"
+      },
+      "image": "assets-src/illustrations/scene-04.png",
+      "clip": null,
+      "camera": "crane-up",
+      "fx": ["dust"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-05",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "The secret of Angkor was water. Canals and reservoirs captured the monsoon rains to water the fields and help feed a growing city.",
+        "km": "អាថ៌កំបាំងនៃអង្គរគឺទឹក។ ព្រែក និងអាងទឹក ស្តុកទឹកភ្លៀងរដូវវស្សា ដើម្បីស្រោចស្រពស្រែ និងចិញ្ចឹមទីក្រុងដ៏ធំ។"
+      },
+      "image": "assets-src/illustrations/scene-05.png",
+      "clip": null,
+      "camera": "push-in",
+      "fx": ["water", "grass", "god-rays"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-06",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "Farmers, weavers and craftsmen were the foundation of the empire.",
+        "km": "កសិករ ជាងត្បាញ និងជាងសិប្បកម្ម គឺជាមូលដ្ឋានគ្រឹះនៃអាណាចក្រ។"
+      },
+      "image": "assets-src/illustrations/scene-06.png",
+      "clip": null,
+      "camera": "truck-left",
+      "fx": ["dust", "grass"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-07",
+      "years": "1113-1150",
+      "yearChip": "1113-1150",
+      "narration": {
+        "en": "In the early twelfth century, King Suryavarman II began Angkor Wat, a temple to Vishnu and one of the largest religious monuments in the world.",
+        "km": "នៅដើមសតវត្សរ៍ទី ១២ ព្រះបាទសូរ្យវរ្ម័នទី ២ ទ្រង់ចាប់ផ្តើមកសាងប្រាសាទអង្គរវត្ត ថ្វាយព្រះវិស្ណុ ជាសំណង់សាសនាដ៏ធំបំផុតមួយលើពិភពលោក។"
+      },
+      "image": "assets-src/illustrations/scene-07.png",
+      "clip": null,
+      "camera": "crane-up",
+      "fx": ["dust", "smoke", "birds"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-08",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "Sandstone was quarried on Mount Kulen and carried to the site, much of it by canal and river.",
+        "km": "ដុំថ្មភក់ត្រូវបានកាប់ពីភ្នំគូលេន ហើយដឹកជញ្ជូនមកកាន់ទីតាំង ភាគច្រើនតាមព្រែក និងទន្លេ។"
+      },
+      "image": "assets-src/illustrations/scene-08.png",
+      "clip": null,
+      "camera": "truck-right",
+      "fx": ["water", "dust"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-09",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "Along its galleries, carvers told epic stories in stone, from gods and heroes to scenes of everyday life.",
+        "km": "តាមច្រករបៀងនៃប្រាសាទ ជាងចម្លាក់បានរៀបរាប់រឿងរ៉ាវលើថ្ម ចាប់ពីព្រះ និងវីរបុរស រហូតដល់ជីវភាពប្រចាំថ្ងៃ។"
+      },
+      "image": "assets-src/illustrations/scene-09.png",
+      "clip": null,
+      "camera": "push-in",
+      "fx": ["dust", "grain"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-10",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "Priests, dancers and kings gathered here. The temple was both a sacred mountain and a monument to power.",
+        "km": "បព្វជិត អប្សរា និងព្រះរាជា ជួបជុំគ្នានៅទីនេះ ប្រាសាទជាទាំងភ្នំពិសិដ្ឋ និងស្នាដៃនៃអំណាច។"
+      },
+      "image": "assets-src/illustrations/scene-10.png",
+      "clip": null,
+      "camera": "push-out",
+      "fx": ["god-rays", "fireflies", "dust"],
+      "transition": "dip-to-black"
+    },
+    {
+      "id": "sc-11",
+      "years": "1177",
+      "yearChip": "1177",
+      "narration": {
+        "en": "In 1177, Cham invaders sailed up the Tonle Sap and sacked the capital.",
+        "km": "នៅឆ្នាំ ១១៧៧ ពួកចាមបានចូលលុកលុយតាមទន្លេសាប ហើយបំផ្លាញរាជធានី។"
+      },
+      "image": "assets-src/illustrations/scene-11.png",
+      "clip": null,
+      "camera": "truck-right",
+      "fx": ["water", "smoke", "fire"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-12",
+      "years": "1181",
+      "yearChip": "1181",
+      "narration": {
+        "en": "A prince named Jayavarman VII rallied his people, drove out the invaders, and was crowned king around 1181.",
+        "km": "បុត្រម្នាក់ព្រះនាមជ័យវរ្ម័នទី ៧ បានប្រមូលផ្តុំប្រជាជន ដេញពួកឈ្លានពាន ហើយឡើងគ្រងរាជ្យនៅប្រហែលឆ្នាំ ១១៨១។"
+      },
+      "image": "assets-src/illustrations/scene-12.png",
+      "clip": null,
+      "camera": "push-in",
+      "fx": ["dust", "smoke"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-13",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "He built Angkor Thom, a walled city, and the Bayon, with its serene faces gazing in every direction.",
+        "km": "ទ្រង់កសាងក្រុងអង្គរធំ និងប្រាសាទបាយ័ន ដែលមានមុខញញឹមសម្លឹងទៅគ្រប់ទិស។"
+      },
+      "image": "assets-src/illustrations/scene-13.png",
+      "clip": null,
+      "camera": "crane-up",
+      "fx": ["god-rays", "dust"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-14",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "His reign also left rest houses along the roads, and inscriptions record more than a hundred hospitals.",
+        "km": "រជ្ជកាលរបស់ទ្រង់ក៏បានបន្សល់ទុកផ្ទះសម្រាកតាមផ្លូវ ហើយសិលាចារឹកកត់ត្រាមន្ទីរពេទ្យជាង ១០០។"
+      },
+      "image": "assets-src/illustrations/scene-14.png",
+      "clip": null,
+      "camera": "truck-left",
+      "fx": ["dust", "grass"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-15",
+      "years": "1296",
+      "yearChip": "1296",
+      "narration": {
+        "en": "In 1296, the Chinese envoy Zhou Daguan arrived and recorded the markets, rituals and daily life of Angkor.",
+        "km": "នៅឆ្នាំ ១២៩៦ អគ្គរាជទូតចិន ចូវ តាកាន់ បានមកដល់ ហើយកត់ត្រាអំពីផ្សារ ពិធី និងជីវភាពរស់នៅនៃអង្គរ។"
+      },
+      "image": "assets-src/illustrations/scene-15.png",
+      "clip": null,
+      "camera": "truck-right",
+      "fx": ["dust", "birds"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-16",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "Over time, shifting beliefs, a changing climate and rivalry with neighbouring kingdoms weakened the empire.",
+        "km": "យូរៗទៅ សាសនា អាកាសធាតុ និងការប្រជែងជាមួយនគរជិតខាង បានធ្វើឲ្យអាណាចក្រចុះខ្សោយ។"
+      },
+      "image": "assets-src/illustrations/scene-16.png",
+      "clip": null,
+      "camera": "push-out",
+      "fx": ["dust", "grain", "smoke"],
+      "transition": "dip-to-black"
+    },
+    {
+      "id": "sc-17",
+      "years": "1431",
+      "yearChip": "1431",
+      "narration": {
+        "en": "In the fifteenth century the capital moved south, but Angkor was never forgotten. Monks kept Angkor Wat alive as a place of worship.",
+        "km": "នៅសតវត្សរ៍ទី ១៥ រាជធានីបានប្តូរទៅខាងត្បូង ប៉ុន្តែអង្គរមិនដែលត្រូវបានបំភ្លេចទេ ព្រះសង្ឃនៅតែថែរក្សាអង្គរវត្តជាទីសក្ការៈ។"
+      },
+      "image": "assets-src/illustrations/scene-17.png",
+      "clip": null,
+      "camera": "push-in",
+      "fx": ["god-rays", "dust", "fireflies"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-18",
+      "years": null,
+      "yearChip": null,
+      "narration": {
+        "en": "Today the temples still stand, a living heritage of the Khmer people, and a reminder of what water, stone and a shared vision can build.",
+        "km": "សព្វថ្ងៃនេះ ប្រាសាទនៅតែឈរស្ងៀម ជាបេតិកភណ្ឌរស់នៃជនជាតិខ្មែរ ហើយរំលឹកយើងពីអ្វីដែលទឹក ថ្ម និងចក្ខុវិស័យរួមអាចកសាងបាន។"
+      },
+      "image": "assets-src/illustrations/scene-18.png",
+      "clip": null,
+      "camera": "crane-up",
+      "fx": ["water", "god-rays", "birds", "grain", "vignette"],
+      "transition": "none",
+      "endCard": true
+    }
+  ]
+}
