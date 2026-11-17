@@ -20,6 +20,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { buildSlideshowList, buildAudioList } from './storyboard.mjs';
+import { LOUDNESS_TARGET, parseLoudnessI, parseSilences, hasLongSilence, loudnormFilter } from './lib/loudness.mjs';
 import { renderMedia, selectComposition, renderStill } from '@remotion/renderer';
 import { getOrCreateBundle } from './lib/bundle-cache.mjs';
 import { resolveBrowser } from './lib/browser.mjs';
@@ -49,6 +50,9 @@ export function parseArgs(argv) {
     allowMissing: false,
     storyboard: false,
     englishSubtitles: false,
+    tts: 'edge',
+    rate: null,
+    noPronunciation: false,
     gpu: true,
     software: false,
   };
@@ -64,6 +68,12 @@ export function parseArgs(argv) {
     else if (a === '--allow-missing') args.allowMissing = true;
     else if (a === '--storyboard') args.storyboard = true;
     else if (a === '--english-subtitles') args.englishSubtitles = true;
+    else if (a === '--tts' && argv[i + 1]) {
+      args.tts = argv[++i];
+      if (!['edge', 'azure'].includes(args.tts)) throw new Error('--tts must be edge or azure');
+    }
+    else if (a === '--rate' && argv[i + 1]) { args.rate = Number(argv[++i]); }
+    else if (a === '--no-pronunciation') args.noPronunciation = true;
     else if (a === '--gpu') { args.gpu = true; args.software = false; }
     else if (a === '--software') { args.software = true; args.gpu = false; }
     else throw new Error(`Unknown or incomplete argument: ${a}`);
@@ -132,7 +142,10 @@ export async function main(argv = process.argv.slice(2)) {
   const storyName = path.basename(args.story, '.json');
   const voiceJson = `public/voice-${storyName}.json`;
   const genArgs = ['scripts/generate-voice.py', '--story', args.story, '--lang', args.lang,
-    '--voice', args.voice, '--out', `public/voice/${storyName}`, '--json', voiceJson];
+    '--voice', args.voice, '--out', `public/voice/${storyName}`, '--json', voiceJson,
+    '--tts', args.tts];
+  if (args.rate !== null && Number.isFinite(args.rate)) genArgs.push('--rate', String(args.rate));
+  if (args.noPronunciation) genArgs.push('--no-pronunciation');
   if (args.mock) genArgs.push('--mock');
   console.log(`[voice] ${genArgs.join(' ')}`);
   execFileSync('python', genArgs, { stdio: 'inherit', cwd: ROOT });
@@ -281,6 +294,32 @@ export async function main(argv = process.argv.slice(2)) {
 
   console.log('[stitch] joining scene MP4s…');
   stitchScenes(sceneFiles, outFile);
+
+  // Phase 5: measure loudness (loudnorm print_format=json) + flag silent gaps.
+  // The ducking itself is frame-pure in the composition; here we only REPORT.
+  const targetLufs = args.vertical ? LOUDNESS_TARGET.vertical : LOUDNESS_TARGET.web;
+  try {
+    const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const ln = execFileSync(npx, ['remotion', 'ffmpeg', '-hide_banner', '-nostats', '-i', outFile,
+      '-af', loudnormFilter(targetLufs), '-f', 'null', '-'], {
+      cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32', maxBuffer: 8 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const i = parseLoudnessI(`${ln.stdout || ''}${ln.stderr || ''}`);
+    console.log(`[loudness] target ${targetLufs} LUFS; measured input I=${i === null ? 'n/a' : `${i} LUFS`} (${targetLufs === LOUDNESS_TARGET.vertical ? 'vertical/TikTok' : 'web'}).`);
+  } catch (e) { console.log(`[loudness] measurement skipped: ${String(e.message).split('\n')[0]}`); }
+  try {
+    const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const sd = execFileSync(npx, ['remotion', 'ffmpeg', '-hide_banner', '-nostats', '-i', outFile,
+      '-af', 'silencedetect=noise=-40dB:d=0.1', '-f', 'null', '-'], {
+      cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32', maxBuffer: 8 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const silences = parseSilences(`${sd.stdout || ''}${sd.stderr || ''}`);
+    const long = silences.filter((s) => s.duration > 1.5);
+    console.log(`[silencedetect] ${silences.length} silence(s); ${long.length} gap(s) > 1.5 s${long.length ? `: ${long.slice(0, 5).map((s) => `${s.start.toFixed(1)}-${s.end.toFixed(1)}(${s.duration.toFixed(1)}s)`).join(', ')}` : ''}.`);
+  } catch (e) { console.log(`[silencedetect] skipped: ${String(e.message).split('\n')[0]}`); }
+
   const wall = Date.now() - t0;
   const reaped = reapNewRemotionChrome(chromeBefore);
   if (reaped.killed > 0) console.log(`[preflight] reaped ${reaped.killed} browser(s).`);

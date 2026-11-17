@@ -77,6 +77,9 @@ export function parseArgs(argv) {
     minDuration: 120,
     allowMissing: false,
     englishSubtitles: false,
+    tts: 'edge',
+    rate: null,
+    noPronunciation: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -93,6 +96,9 @@ export function parseArgs(argv) {
     else if (a === '--min-duration' && argv[i + 1]) { args.minDuration = Number(argv[++i]); }
     else if (a === '--allow-missing') { args.allowMissing = true; }
     else if (a === '--english-subtitles') { args.englishSubtitles = true; }
+    else if (a === '--tts' && argv[i + 1]) { args.tts = argv[++i]; }
+    else if (a === '--rate' && argv[i + 1]) { args.rate = Number(argv[++i]); }
+    else if (a === '--no-pronunciation') { args.noPronunciation = true; }
     else { throw new Error(`Unknown or incomplete argument: ${a}`); }
   }
   if (!['auto', '3d', 'illustrated'].includes(args.style)) {
@@ -128,6 +134,9 @@ async function main() {
     if (args.allowMissing) delegated.push('--allow-missing');
     if (args.storyboard) delegated.push('--storyboard');
     if (args.englishSubtitles) delegated.push('--english-subtitles');
+    if (args.tts !== 'edge') delegated.push('--tts', args.tts);
+    if (args.rate !== null) delegated.push('--rate', String(args.rate));
+    if (args.noPronunciation) delegated.push('--no-pronunciation');
     if (args.software) delegated.push('--software');
     delegated.push('--min-duration', String(args.minDuration));
     await illustratedMain(delegated);

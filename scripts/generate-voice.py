@@ -22,10 +22,77 @@ import tempfile
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-async def generate_edge_tts(text, voice, out_path):
+# Khmer proper-noun pronunciation substitutions (Phase 5).
+# Keys are the names as they appear in the story; values are a Khmer
+# phonetic spelling that edge-tts / Azure pronounce more faithfully.
+# Applied to spoken narration only, never to subtitles.
+PRONUNCIATION = {
+    "Jayavarman": "ជ័យវរ្ម័ន",
+    "Yasodharapura": "យសោធរបុរៈ",
+    "Suryavarman": "សូរ្យវរ្ម័ន",
+    "Bayon": "បាយ័ន",
+    "Roluos": "រលួស",
+    "Kulen": "គូលេន",
+}
+
+
+def apply_pronunciation(text):
+    """Substitute English proper nouns with Khmer phonetic spellings."""
+    out = text
+    for en, km in PRONUNCIATION.items():
+        out = out.replace(en, km)
+    return out
+
+
+async def generate_edge_tts(text, voice, out_path, rate=None):
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice)
+    # edge-tts rate accepts e.g. "-10%" / "+5%".
+    kwargs = {}
+    if rate:
+        sign = "+" if rate > 0 else ""
+        kwargs["rate"] = f"{sign}{rate}%"
+    communicate = edge_tts.Communicate(text, voice, **kwargs)
     await communicate.save(out_path)
+
+
+async def generate_azure_tts(text, voice, out_path, rate=None):
+    """Azure Cognitive Services Speech (official SDK), key from env only.
+
+    Never logs or writes the key. Voice name maps to a full Azure voice id via
+    AZURE_VOICE_<name> env or the default km-KH voices.
+    """
+    import os
+    import azure.cognitiveservices.speech as speechsdk
+    key = os.environ.get("AZURE_SPEECH_KEY")
+    region = os.environ.get("AZURE_SPEECH_REGION")
+    if not key or not region:
+        print("[Error] Azure TTS needs AZURE_SPEECH_KEY and AZURE_SPEECH_REGION env vars.")
+        sys.exit(1)
+    config = speechsdk.SpeechConfig(subscription=key, region=region)
+    # Full Azure voice id: env override, else map Khmer neural voices.
+    voice_id = os.environ.get("AZURE_VOICE", {
+        "km-KH-PisethNeural": "km-KH-PisethNeural",
+        "km-KH-SreymomNeural": "km-KH-SreymomNeural",
+        "en-US-AriaNeural": "en-US-AriaNeural",
+    }.get(voice, voice))
+    config.speech_synthesis_voice_name = voice_id
+    if rate:
+        sign = "+" if rate > 0 else ""
+        # SSML rate is a multiplicative factor; approximate percent as 0.01*rate.
+        factor = 1.0 + rate / 100.0
+        ssml = (
+            f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/Synthesis" '
+            f'xml:lang="km-KH"><voice name="{voice_id}">'
+            f'<prosody rate="{factor:.2f}">{text}</prosody></voice></speak>'
+        )
+        result = speechsdk.SpeechSynthesizer(speech_config=config, audio_config=None).speak_ssml_async(ssml).get()
+    else:
+        result = speechsdk.SpeechSynthesizer(speech_config=config, audio_config=None).speak_text_async(text).get()
+    if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
+        print(f"[Error] Azure TTS failed: {result.reason}")
+        sys.exit(1)
+    with open(out_path, "wb") as f:
+        f.write(result.audio_data)
 
 def get_npx():
     npx = shutil.which("npx") or shutil.which("npx.cmd")
@@ -164,6 +231,12 @@ def main():
                         help='edge-tts voice name; default depends on --lang '
                              '(km-KH-PisethNeural for km, en-US-AriaNeural for en)')
     parser.add_argument('--mock', action='store_true', help='Use mock synthesis with explicit --mock flag')
+    parser.add_argument('--tts', choices=['edge', 'azure'], default='edge',
+                        help='TTS provider (Phase 5). edge=default for drafts; azure=official API (key from env, never committed).')
+    parser.add_argument('--rate', type=int, default=None,
+                        help='Pacing as a percent, e.g. -10 (slower) or 5 (faster).')
+    parser.add_argument('--no-pronunciation', action='store_true',
+                        help='Disable the Khmer proper-noun pronunciation substitution table.')
     parser.add_argument('--out', default='public/voice')
     parser.add_argument('--json', default='public/voice.json',
                         help='Where to write the voice.json data file')
@@ -199,7 +272,7 @@ def main():
               f"Add new voices to KNOWN_VOICES in scripts/generate-voice.py after verifying them with edge-tts.")
         sys.exit(1)
 
-    provider = "mock" if args.mock else "edge-tts"
+    provider = "mock" if args.mock else ("azure" if args.tts == "azure" else "edge-tts")
     sample_rate = 22050
     voice_data = {
         "story": args.story,
@@ -207,10 +280,11 @@ def main():
         "language": lang,
         "voice": voice,
         "provider": provider,
+        "rate": args.rate,
         "scenes": []
     }
 
-    print(f"[Voice Generator] Story: {args.story} | Lang: {lang} | Voice: {voice} | Provider: {provider}")
+    print(f"[Voice Generator] Story: {args.story} | Lang: {lang} | Voice: {voice} | Provider: {provider} | Rate: {args.rate}")
 
     for scene_idx, scene in enumerate(story.get("scenes", [])):
         scene_id = scene.get("id", f"scene{scene_idx+1}")
@@ -240,8 +314,11 @@ def main():
         for line_idx, dlg in enumerate(dialogue_list):
             text = dlg.get("text", "")
             subtitle = dlg.get("subtitle", text)
-            
-            cache_seed = f"{text}::{voice}::{provider}::{'mock' if args.mock else 'real'}"
+            # Pronunciation substitution applies to spoken audio only.
+            spoken = text if args.no_pronunciation else apply_pronunciation(text)
+
+            cache_seed = (f"{spoken}::{voice}::{provider}::{args.rate}::"
+                          f"{'mock' if args.mock else 'real'}")
             text_hash = hashlib.md5(cache_seed.encode('utf-8')).hexdigest()
 
             prefix = "mock-" if args.mock else ""
@@ -286,10 +363,13 @@ def main():
             else:
                 try:
                     tmp_path = audio_path + ".tmp"
-                    asyncio.run(generate_edge_tts(text, voice, tmp_path))
+                    if args.tts == "azure":
+                        asyncio.run(generate_azure_tts(spoken, voice, tmp_path, args.rate))
+                    else:
+                        asyncio.run(generate_edge_tts(spoken, voice, tmp_path, args.rate))
                     os.replace(tmp_path, audio_path)
                 except Exception as e:
-                    print(f"[Error] edge-tts generation failed for '{text}': {e}")
+                    print(f"[Error] {provider} generation failed for '{spoken}': {e}")
                     sys.exit(1)
 
             exact_dur, env = process_audio_file(audio_path, is_mock=args.mock)
