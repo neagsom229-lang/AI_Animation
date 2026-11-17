@@ -20,7 +20,7 @@ test('directionVector maps overrides', () => {
   assert.deepEqual(directionVector('right'), { x: 1, y: 0 });
   assert.deepEqual(directionVector('up'), { x: 0, y: -1 });
   assert.deepEqual(directionVector('down'), { x: 0, y: 1 });
-  assert.deepEqual(directionVector(undefined), { x: 1, y: 0 });
+  assert.deepEqual(directionVector(undefined), { x: 0, y: 0 }, 'Round 10: no direction => no assumed motion');
 });
 
 test('limitParallax is deterministic, respects override, and never exceeds ceiling', () => {
