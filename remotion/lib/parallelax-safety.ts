@@ -46,14 +46,23 @@ export function safetyFactor(depthEdgeMetric: number): number {
   return Math.min(1, Math.max(MIN_LIMIT_FACTOR, 1 - clamp01(m / EDGE_LIMIT)));
 }
 
-/** Direction to signed unit-ish vector. */
-export function directionVector(direction?: MotionOverride['direction']): { x: number; y: number } {
+/** Round 10 item 3: direction derived from a camera move string. No hardcoded default. */
+export function directionFromCamera(camera?: string): NonNullable<MotionOverride['direction']> | 'none' {
+  const c = String(camera || 'static').toLowerCase();
+  if (c.includes('truck-left') || c.includes('truck_left')) return 'left';
+  if (c.includes('truck-right') || c.includes('truck_right')) return 'right';
+  return 'none'; // push/crane/static: no lateral travel
+}
+
+/** Direction to signed unit-ish vector. 'none' -> zero (no lateral offset). */
+export function directionVector(direction?: MotionOverride['direction'] | 'none'): { x: number; y: number } {
   switch (direction) {
     case 'left': return { x: -1, y: 0 };
     case 'right': return { x: 1, y: 0 };
     case 'up': return { x: 0, y: -1 };
     case 'down': return { x: 0, y: 1 };
-    default: return { x: 1, y: 0 };
+    case 'none': return { x: 0, y: 0 };
+    default: return { x: 0, y: 0 }; // unknown -> no motion (never assume a direction)
   }
 }
 
@@ -61,11 +70,17 @@ export function directionVector(direction?: MotionOverride['direction']): { x: n
  * Compute the effective, safety-limited parallax for a scene.
  * Pure: same (metric, override) -> identical result.
  */
-export function limitParallax(depthEdgeMetric: number, override?: MotionOverride): SafetyResult {
+export function limitParallax(
+  depthEdgeMetric: number,
+  override?: MotionOverride,
+  camera?: string
+): SafetyResult {
   const factor = safetyFactor(depthEdgeMetric);
   const requested = clamp01(override && override.amplitude !== undefined ? override.amplitude : 1);
   const amplitude = Math.min(ABSOLUTE_MAX_AMPLITUDE, requested * factor * ABSOLUTE_MAX_AMPLITUDE);
   const offset = Math.min(ABSOLUTE_MAX_OFFSET, amplitude * ABSOLUTE_MAX_OFFSET / Math.max(ABSOLUTE_MAX_AMPLITUDE, 1e-9));
-  const dir = directionVector(override && override.direction);
+  // Explicit override wins; otherwise derive from the camera move (no hardcoded "left").
+  const direction = (override && override.direction) || directionFromCamera(camera);
+  const dir = directionVector(direction);
   return { factor, amplitude, offset, dirX: dir.x, dirY: dir.y };
 }

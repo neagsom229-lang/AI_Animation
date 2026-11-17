@@ -326,7 +326,7 @@ const IllustratedScene: React.FC<{
   const canParallax = mediaType === 'illustration' && Boolean(imagePath && status.image && status.depth);
   const isPlaceholder = !useClip && !canParallax && !isWorld3d;
   // Safety-limited parallax amplitude: depth edges + per-scene motion override.
-  const safety = limitParallax(depthEdge ?? 0, spec.motion as MotionOverride | undefined);
+  const safety = limitParallax(depthEdge ?? 0, spec.motion as MotionOverride | undefined, spec.camera);
   const amplitude = safety.factor > 0 ? (safety.amplitude / Math.max(0.0001, 0.10)) * (spec.motion?.amplitude ?? 1) : 0;
   // Clamp to [0,1]; the limitParallax ceiling guarantees no over-stretch.
   const safeAmplitude = Math.min(1, Math.max(0, amplitude));

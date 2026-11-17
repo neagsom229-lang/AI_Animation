@@ -410,6 +410,8 @@ def main():
         # Round 10 item 1: limit factor clamped to [0.25, 1].
         limit_factor = max(0.25, min(1.0, 1.0 - edge / 0.35))
         motion = scene.get("motion") or {}
+        # Round 10 item 3: direction from camera move (not hardcoded "left").
+        direction = motion.get("direction") or direction_from_camera(scene.get("camera", "static"))
         # depthSource: reads from the cache sidecar when it is the new JSON form,
         # otherwise falls back to the mode requested this run (legacy plain sidecar).
         depth_source = _depth_source_from_sidecar(out, args.depth)
@@ -425,7 +427,7 @@ def main():
             "depthSource": depth_source,
             "limitFactor": round(limit_factor, 4),
             "requestedAmplitude": motion.get("amplitude", 1),
-            "direction": motion.get("direction", "left"),
+            "direction": direction,
             "camera": scene.get("camera", "static"),
             "note": "edgeMetric=frac(|Sobel|>0.08, depth normalized 0..1); depthRange=p95-p5; flatDepth=range<0.15; limit=clamp(1-edge/0.35,0.25,1)",
         })
@@ -437,6 +439,20 @@ def main():
     if missing and not args.allow_missing:
         print("[error] missing source images; re-run with --allow-missing to skip them.")
         sys.exit(6)
+
+
+def direction_from_camera(camera):
+    """Round 10 item 3: derive parallax direction from the camera move.
+
+    truck-left -> left, truck-right -> right, push/crane/static -> none.
+    An explicit scene `motion.direction` still overrides this. Pure.
+    """
+    c = str(camera or "static").lower()
+    if "truck-left" in c or "truck_left" in c:
+        return "left"
+    if "truck-right" in c or "truck_right" in c:
+        return "right"
+    return "none"  # push-in / push-out / crane / static have no lateral travel
 
 
 def _depth_source_from_sidecar(depth_path, fallback):
