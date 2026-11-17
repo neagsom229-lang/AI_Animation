@@ -10,7 +10,7 @@ import path from 'node:path';
 export function sceneFromFilename(name) {
   const base = String(name).split(path.sep).pop();
   const m = base.match(/\d+/);
-  return m ? Number(m[1]) : null;
+  return m ? Number(m[0]) : null;
 }
 
 /**

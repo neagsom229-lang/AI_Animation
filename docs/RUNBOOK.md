@@ -1,6 +1,28 @@
 # Runbook — Kuanimation Studio (one page)
 
-## Daily build (illustrated film)
+## Film factory (one CLI — preferred)
+
+```powershell
+node scripts/film.mjs status              # dashboard + wrong-folder + cost + verdict
+node scripts/film.mjs status --strict     # exit 1 if not releasable
+node scripts/film.mjs ingest --force      # copy inbox images -> normalized + manifest (force = provisional license)
+node scripts/film.mjs depth               # depth.py (gradient if model unavailable)
+node scripts/film.mjs voice               # edge-tts narration
+node scripts/film.mjs preview             # contact sheet + animatic from REAL images
+node scripts/film.mjs render --draft      # scene-cached render, resume from build/state.json
+node scripts/film.mjs publish             # stamped publish pack in out/publish/<story>/
+node scripts/film.mjs qa                  # 9 gates
+node scripts/film.mjs all --draft         # whole chain
+node scripts/film.mjs watch               # watch inbox + story, debounce, partial rebuild
+node scripts/film.mjs clean               # remove build/ (regenerable)
+```
+
+Flags: `--story <path> --only scene=N --force --draft --strict --verbose --allow-missing`.
+Config: `film.config.json` (validated at start). State/logs/previews: `build/`.
+Drop images into `assets-src/inbox/`, NEVER into `out/` or `build/` — `film status`
+prints the exact fix commands if you do. See `docs/ARCHITECTURE_FACTORY.md`.
+
+## Daily build (illustrated film, legacy direct scripts)
 
 ```powershell
 cd D:\General\Animation\kuanimation-skill

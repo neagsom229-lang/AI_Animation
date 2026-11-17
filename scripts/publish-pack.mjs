@@ -107,13 +107,20 @@ export async function main(argv = process.argv.slice(2)) {
   }
   console.log(`[publish] master: ${sources.master} (${(fs.statSync(sources.master).size / 1e6).toFixed(1)} MB)`);
 
+  // Factory stamp: git commit, config hash, tool versions, per-scene hashes, licenses.
+  let stamp = {};
+  try {
+    const { buildStamp } = await import('./lib/film-stamp.mjs');
+    const { loadConfig, configHash } = await import('./lib/film-config.mjs');
+    const cfg = loadConfig(ROOT);
+    stamp = buildStamp({ root: ROOT, cfg, configHashValue: configHash(cfg), story, voiceData, storyName, durationSeconds: seconds });
+    console.log(`[publish] stamp: git=${stamp.gitCommit} config=${stamp.configHash} outside-license=${stamp.licenses.outsideAllowList.join(',') || 'none'}`);
+  } catch (e) { console.log(`[publish] WARN: stamp unavailable: ${e.message}`); }
   const result = {
+    ...stamp,
     story: args.story, generated: new Date().toISOString(),
-    versions: {}, files: {}, durationSeconds: seconds, scenes: timeline.scenes.length,
+    versions: stamp.toolVersions || {}, files: {}, durationSeconds: seconds, scenes: timeline.scenes.length,
   };
-  for (const p of ['remotion', 'three', 'react', 'typescript']) {
-    try { result.versions[p] = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', p, 'package.json'), 'utf8')).version; } catch { /* ignore */ }
-  }
 
   // Copy masters into publish dir.
   const masterOut = path.join(outDir, `${storyName}-16x9-1080p.mp4`);
