@@ -37,3 +37,9 @@ test('baselines carry provenance (not fabricated)', () => {
   assert.ok(MEASURED_MS_PER_FRAME.illustration.source.includes('MEASUREMENTS.md'));
   assert.ok(MEASURED_MS_PER_FRAME.world3d.source.includes('MEASUREMENTS.md'));
 });
+
+test('Round 12 item 5: illustration baseline re-baselined to ~55-60 ms/frame', () => {
+  assert.ok(MEASURED_MS_PER_FRAME.illustration.ms720 >= 55 && MEASURED_MS_PER_FRAME.illustration.ms720 <= 60,
+    `illustration baseline ${MEASURED_MS_PER_FRAME.illustration.ms720} must be 55-60`);
+  assert.ok(MEASURED_MS_PER_FRAME.illustration.source.includes('Round 11'), 'source must cite the latest measurements');
+});

@@ -20,7 +20,10 @@ const ROOT = process.cwd();
 
 /** Measured baselines with provenance. */
 export const MEASURED_MS_PER_FRAME = {
-  illustration: { ms720: 223, source: 'out/review/draft-frames/MEASUREMENTS.md (scene 4, real render)' },
+  // Round 12 item 5: re-baselined from the LATEST illustration measurements
+  // (Round 11 scenes 2=59.8 and 15=54.8 ms/frame at 1280x720, real renders).
+  // The old 223 figure came from an early run with a heavier code path.
+  illustration: { ms720: 57, source: 'out/review/draft-frames/MEASUREMENTS.md (Round 11: sc-02=59.8, sc-15=54.8; mean 57)' },
   world3d: { ms720: 600, source: 'out/review/draft-frames/MEASUREMENTS.md (scenes 1/7, 646/552, midpoint 600)' },
   clip: { ms720: 40, source: 'cost.msPerFrame.clip in film.config.json (placeholder, unverified)' },
 };
