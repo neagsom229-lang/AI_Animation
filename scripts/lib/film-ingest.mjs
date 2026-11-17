@@ -57,6 +57,22 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
   fs.mkdirSync(originals, { recursive: true });
   fs.mkdirSync(staging, { recursive: true });
 
+  // Round 12 item 4: state the license requirement FIRST, before scanning any
+  // image — the operator must know up front that a license URL is mandatory.
+  graph.log('ingest REQUIREMENT: each image must have a licenseTermsUrl (tool license URL) recorded in film.config.json → intake.licenseTermsUrl.');
+  const licenseUrl = cfg.intake?.licenseTermsUrl || '';
+  if (licenseUrl) {
+    graph.log(`  licenseTermsUrl = ${licenseUrl}`);
+  } else if (force) {
+    graph.log('  WARN: licenseTermsUrl is EMPTY — --force grants a PROVISIONAL license only; final render will BLOCK until filled.');
+  } else {
+    throw new Error(
+      `ingest: licenseTermsUrl is required in film.config.json (intake.licenseTermsUrl). ` +
+      `FIX: set it to the generating tool's license terms URL, then re-run. ` +
+      `Use --force only for a provisional dry run (final render blocked).`
+    );
+  }
+
   const mapPath = path.join(inbox, 'map.json');
   const mapObject = fs.existsSync(mapPath) ? JSON.parse(fs.readFileSync(mapPath, 'utf8')) : {};
   const files = fs.readdirSync(inbox).filter((f) => /\.(png|jpe?g)$/i.test(f) && !f.startsWith('_'));
