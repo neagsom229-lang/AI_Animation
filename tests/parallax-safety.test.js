@@ -7,12 +7,12 @@ import {
   ABSOLUTE_MAX_AMPLITUDE, ABSOLUTE_MAX_OFFSET, EDGE_LIMIT,
 } from '../remotion/lib/parallelax-safety.ts';
 
-test('safetyFactor: 1 with no edges, 0 at edge limit, clamped', () => {
+test('safetyFactor: 1 with no edges, clamped to [0.25,1] at/above edge limit', () => {
   assert.equal(safetyFactor(0), 1);
-  assert.equal(safetyFactor(EDGE_LIMIT), 0);
-  assert.ok(safetyFactor(EDGE_LIMIT / 2) > 0 && safetyFactor(EDGE_LIMIT / 2) < 1);
-  assert.equal(safetyFactor(1), 0, 'beyond limit clamps to 0');
-  assert.equal(safetyFactor(NaN), 0);
+  assert.equal(safetyFactor(EDGE_LIMIT), 0.25, 'Round 10: clamps at MIN_LIMIT_FACTOR');
+  assert.ok(safetyFactor(EDGE_LIMIT / 2) > 0.25 && safetyFactor(EDGE_LIMIT / 2) < 1);
+  assert.equal(safetyFactor(1), 0.25, 'beyond limit clamps to 0.25, never 0');
+  assert.equal(safetyFactor(NaN), 0.25);
 });
 
 test('directionVector maps overrides', () => {
@@ -30,10 +30,10 @@ test('limitParallax is deterministic, respects override, and never exceeds ceili
   assert.ok(a.amplitude <= ABSOLUTE_MAX_AMPLITUDE + 1e-12);
   assert.ok(a.offset <= ABSOLUTE_MAX_OFFSET + 1e-12);
   assert.equal(a.dirX, -1);
-  // Hard edges fully suppress motion even with a large override.
+  // Hard edges clamp motion to the 0.25 floor (Round 10), not zero.
   const z = limitParallax(0.5, { amplitude: 1 });
-  assert.equal(z.amplitude, 0);
-  assert.equal(z.factor, 0);
+  assert.ok(z.amplitude > 0 && z.amplitude <= ABSOLUTE_MAX_AMPLITUDE * 0.25 + 1e-12);
+  assert.equal(z.factor, 0.25);
   // Clean depth with small override stays small.
   const s = limitParallax(0, { amplitude: 0.1 });
   assert.ok(s.amplitude < a.amplitude);

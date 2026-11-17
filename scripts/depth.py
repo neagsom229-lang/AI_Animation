@@ -142,32 +142,73 @@ def read_gray16(path):
     return rows
 
 
-def depth_edge_metric(depth_path, threshold=6000):
-    """Fraction of adjacent depth pixels with a jump > threshold (0..1).
+# --- Round 10 item 1: normalized depth statistics --------------------------
 
-    This is the 'depth-edge stretch metric' used to auto-limit parallax: faces
-    and hands sit on sharp depth edges, so a high value means camera travel
-    would smear detail. Pure function of the depth map.
+SOBEL_THRESHOLD = 0.08   # edgeMetric: fraction of pixels with |Sobel| > 0.08 (normalized depth)
+FLAT_DEPTH_RANGE = 0.15  # flatDepth: p95 - p5 < 0.15
+
+
+def depth_statistics(depth_path, threshold=SOBEL_THRESHOLD):
+    """Compute edgeMetric, depthRange, flatDepth from a 16-bit depth PNG.
+
+    All math is on depth normalized to 0..1 (value / 65535).
+      * edgeMetric = fraction of interior pixels whose LOCAL depth gradient
+        magnitude (3x3 Sobel, divided by 8 so a full 0->1 step == 1.0) exceeds
+        `threshold` (0.08). Hard edges (faces/hands on a learned depth map)
+        raise it; a smooth gradient or a flat map yields ~0.
+      * depthRange = p95(depth) - p5(depth) of normalized values.
+      * flatDepth  = depthRange < 0.15 (little usable depth separation).
+    Returns dict with edgeMetric, depthRange, flatDepth, width, height.
     """
-    rows = read_gray16(depth_path)
-    h = len(rows)
+    rows16 = read_gray16(depth_path)
+    h = len(rows16)
     if h == 0:
-        return 1.0
-    w = len(rows[0])
+        return {"edgeMetric": 1.0, "depthRange": 0.0, "flatDepth": True, "width": 0, "height": 0}
+    w = len(rows16[0])
+    norm = [[v / 65535.0 for v in row] for row in rows16]
+
+    # Sobel on interior pixels (3x3), magnitude normalized by 8.
     edges = 0
     total = 0
-    for y in range(h):
-        for x in range(w - 1):
+    for y in range(1, h - 1):
+        r0, r1, r2 = norm[y - 1], norm[y], norm[y + 1]
+        for x in range(1, w - 1):
+            gx = (-r0[x - 1] + r0[x + 1] - 2 * r1[x - 1] + 2 * r1[x + 1] - r2[x - 1] + r2[x + 1]) / 8.0
+            gy = (r0[x - 1] + 2 * r0[x] + r0[x + 1] - r2[x - 1] - 2 * r2[x] - r2[x + 1]) / 8.0
             total += 1
-            if abs(rows[y][x + 1] - rows[y][x]) > threshold:
+            if (gx * gx + gy * gy) ** 0.5 > threshold:
                 edges += 1
-    if h > 1:
-        for y in range(h - 1):
-            for x in range(w):
-                total += 1
-                if abs(rows[y + 1][x] - rows[y][x]) > threshold:
-                    edges += 1
-    return edges / max(1, total)
+    edge_metric = edges / max(1, total)
+
+    # Percentiles on a coarse histogram (256 bins) — deterministic, cheap.
+    hist = [0] * 256
+    for row in norm:
+        for v in row:
+            b = min(255, max(0, int(v * 255)))
+            hist[b] += 1
+    count = sum(hist)
+    def percentile(p):
+        target = count * p
+        acc = 0
+        for b, n in enumerate(hist):
+            acc += n
+            if acc >= target:
+                return b / 255.0
+        return 1.0
+    p5, p95 = percentile(0.05), percentile(0.95)
+    depth_range = p95 - p5
+    return {
+        "edgeMetric": round(edge_metric, 6),
+        "depthRange": round(depth_range, 6),
+        "flatDepth": depth_range < FLAT_DEPTH_RANGE,
+        "width": w,
+        "height": h,
+    }
+
+
+def depth_edge_metric(depth_path, threshold=SOBEL_THRESHOLD):
+    """Backward-compatible wrapper: returns only edgeMetric (Round 10 definition)."""
+    return depth_statistics(depth_path, threshold)["edgeMetric"]
 
 
 def sha256_file(path):
@@ -273,7 +314,13 @@ def main():
     p.add_argument("--layers", action="store_true", help="also write fg/mid/bg masks (OpenCV)")
     p.add_argument("--install-deps", action="store_true", help="python -m pip install dependencies")
     p.add_argument("--license-check", action="store_true", help="print verified model license and exit")
+    p.add_argument("--stats", metavar="DEPTH_PNG", default=None,
+                   help="print depth_statistics() as JSON for one depth PNG and exit")
     args = p.parse_args()
+
+    if args.stats:
+        print(json.dumps(depth_statistics(args.stats)))
+        return
 
     license_check()
     if args.license_check:
@@ -322,17 +369,47 @@ def main():
         if args.layers:
             layer_split(image, os.path.splitext(image)[0])
 
-        edge = depth_edge_metric(out)
+        stats = depth_statistics(out)
+        edge = stats["edgeMetric"]
+        # Round 10 item 1: limit factor clamped to [0.25, 1].
+        limit_factor = max(0.25, min(1.0, 1.0 - edge / 0.35))
         motion = scene.get("motion") or {}
+        # depthSource: reads from the cache sidecar when it is the new JSON form,
+        # otherwise falls back to the mode requested this run (legacy plain sidecar).
+        depth_source = _depth_source_from_sidecar(out, args.depth)
+        flat_note = " FLAT DEPTH (range < 0.15): parallax has little separation." if stats["flatDepth"] else ""
+        print("[metrics] %s: edge=%.4f range=%.3f flat=%s source=%s%s" % (
+            scene.get("id"), edge, stats["depthRange"], stats["flatDepth"], depth_source, flat_note))
         metrics["scenes"].append({
             "scene": scene.get("id"),
             "imageSha256": digest,
-            "depthEdgeMetric": round(edge, 5),
+            "depthEdgeMetric": edge,
+            "depthRange": stats["depthRange"],
+            "flatDepth": stats["flatDepth"],
+            "depthSource": depth_source,
+            "limitFactor": round(limit_factor, 4),
             "requestedAmplitude": motion.get("amplitude", 1),
             "direction": motion.get("direction", "left"),
             "camera": scene.get("camera", "static"),
-            "note": "limit factor = clamp(1 - edge/0.35); see remotion/lib/parallelax-safety.ts",
+            "note": "edgeMetric=frac(|Sobel|>0.08, depth normalized 0..1); depthRange=p95-p5; flatDepth=range<0.15; limit=clamp(1-edge/0.35,0.25,1)",
         })
+
+
+def _depth_source_from_sidecar(depth_path, fallback):
+    """Read depthSource from a JSON cache sidecar; legacy plain-hash sidecars
+    predate source tracking and cannot identify their origin -> return the
+    current mode explicitly marked as assumed (never present as verified)."""
+    sidecar = depth_path + ".sha256"
+    if not os.path.exists(sidecar):
+        return fallback
+    raw = open(sidecar, "r", encoding="utf-8").read().strip()
+    if raw.startswith("{"):
+        try:
+            return json.loads(raw).get("depthSource", fallback)
+        except (ValueError, TypeError):
+            return fallback
+    # Legacy sidecar: source genuinely unknown. Say so rather than guess.
+    return "unknown-legacy-cache"
 
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)

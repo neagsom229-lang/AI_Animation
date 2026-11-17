@@ -36,11 +36,14 @@ function clamp01(v: number): number {
   return Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
 }
 
-/** Safety factor from a depth-edge metric: 1 at 0 edges, 0 at EDGE_LIMIT. */
+/** Minimum limit factor (Round 10 item 1): never fully suppress motion. */
+export const MIN_LIMIT_FACTOR = 0.25;
+
+/** Safety factor: clamp(1 - edgeMetric/0.35, 0.25, 1). Unknown edge → 0.25. */
 export function safetyFactor(depthEdgeMetric: number): number {
-  if (!Number.isFinite(depthEdgeMetric)) return 0; // unknown edge metric → suppress motion
+  if (!Number.isFinite(depthEdgeMetric)) return MIN_LIMIT_FACTOR;
   const m = clamp01(depthEdgeMetric);
-  return 1 - clamp01(m / EDGE_LIMIT);
+  return Math.min(1, Math.max(MIN_LIMIT_FACTOR, 1 - clamp01(m / EDGE_LIMIT)));
 }
 
 /** Direction to signed unit-ish vector. */
