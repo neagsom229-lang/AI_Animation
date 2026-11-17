@@ -51,6 +51,7 @@ import {
   type CameraMove,
 } from '../lib/illustrated-motion.ts';
 import { publicAssetPath, depthPathFor } from '../lib/illustrated-assets.ts';
+import { limitParallax, type MotionOverride } from '../lib/parallelax-safety.ts';
 import {
   DEPTH_STRENGTH,
   PLANE_SEGMENTS_X,
@@ -96,7 +97,9 @@ const ParallaxPlane: React.FC<{
   frame: number;
   fps: number;
   durationInFrames: number;
-}> = ({ imageUrl, depthUrl, move, seed, frame, fps, durationInFrames }) => {
+  /** Safety-limited amplitude in [0,1] from depth edge metric + override. */
+  amplitude?: number;
+}> = ({ imageUrl, depthUrl, move, seed, frame, fps, durationInFrames, amplitude = 1 }) => {
   const [image, depth] = useLoader(THREE.TextureLoader, [imageUrl, depthUrl]);
   const pose = parallaxPose(move, frame, fps, durationInFrames, seed);
   const material = React.useMemo(() => {
@@ -124,8 +127,9 @@ const ParallaxPlane: React.FC<{
   // Set uniforms synchronously in the render body (NOT useEffect): effects run
   // after commit and can land on a different frame during continuous rendering,
   // which breaks byte-level determinism even when isolated stills match.
-  material.uniforms.uOffset.value.set(pose.offsetX, pose.offsetY);
-  material.uniforms.uScale.value = pose.scale;
+  material.uniforms.uOffset.value.set(pose.offsetX * amplitude, pose.offsetY * amplitude);
+  material.uniforms.uScale.value = 1 + (pose.scale - 1) * amplitude;
+  material.uniforms.uStrength.value = amplitude;
 
   return (
     <mesh material={material} frustumCulled={false}>
@@ -152,6 +156,8 @@ interface IllustratedFilmProps {
   /** True when the declared music file exists (else skipped/logged). */
   musicPresent?: boolean;
   englishSubtitles?: boolean;
+  /** Per-scene depth-edge metric from scripts/depth.py (parallax-metrics.json). */
+  parallaxMetrics?: Record<string, number>;
 }
 
 export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
@@ -164,6 +170,7 @@ export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
   assetStatus,
   musicPresent,
   englishSubtitles,
+  parallaxMetrics,
 }) => {
   const { fps } = useVideoConfig();
   const [fontHandle] = React.useState(() => delayRender('Loading Hanuman subtitle font'));
@@ -229,6 +236,7 @@ export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
               captionLanguage={captionLanguage}
               englishSubtitles={Boolean(englishSubtitles)}
               allowMissing={Boolean(allowMissing)}
+              depthEdge={parallaxMetrics ? parallaxMetrics[scene.id] : undefined}
             />
           </Sequence>
         );
@@ -272,7 +280,8 @@ const IllustratedScene: React.FC<{
   captionLanguage: string;
   englishSubtitles: boolean;
   allowMissing: boolean;
-}> = ({ scene, spec, status, fps, isDraft, captionLanguage, englishSubtitles, allowMissing }) => {
+  depthEdge?: number;
+}> = ({ scene, spec, status, fps, isDraft, captionLanguage, englishSubtitles, allowMissing, depthEdge }) => {
   // Local frames inside <Sequence>.
   const frame = useCurrentFrame();
   const dur = scene.durationInFrames;
@@ -287,6 +296,11 @@ const IllustratedScene: React.FC<{
   const depthPath = spec.image ? publicAssetPath(depthPathFor(spec.image)) : null;
   const canParallax = Boolean(imagePath && status.image && status.depth);
   const isPlaceholder = !useClip && !canParallax;
+  // Safety-limited parallax amplitude: depth edges + per-scene motion override.
+  const safety = limitParallax(depthEdge ?? 0, spec.motion as MotionOverride | undefined);
+  const amplitude = safety.factor > 0 ? (safety.amplitude / Math.max(0.0001, 0.10)) * (spec.motion?.amplitude ?? 1) : 0;
+  // Clamp to [0,1]; the limitParallax ceiling guarantees no over-stretch.
+  const safeAmplitude = Math.min(1, Math.max(0, amplitude));
 
   // Subtitle text from narration (km spoken, gloss in English).
   const line = scene.lines[0];
@@ -317,6 +331,7 @@ const IllustratedScene: React.FC<{
               frame={frame}
               fps={fps}
               durationInFrames={dur}
+              amplitude={safeAmplitude}
             />
           </ThreeCanvas>
         ) : (

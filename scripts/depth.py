@@ -116,6 +116,60 @@ def depth_path_for(image_path):
     return base + "-depth" + (ext or ".png")
 
 
+def read_gray16(path):
+    """Read our 16-bit grayscale PNG back into a list of rows (stdlib only)."""
+    data = open(path, "rb").read()
+    pos = 8
+    width = height = None
+    idat = bytearray()
+    while pos < len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        ctype = data[pos + 4:pos + 8]
+        chunk = data[pos + 8:pos + 8 + length]
+        if ctype == b"IHDR":
+            width, height, bd, ct = struct.unpack(">IIBB", chunk[:10])
+            if bd != 16 or ct != 0:
+                raise ValueError("expected 16-bit grayscale depth PNG")
+        elif ctype == b"IDAT":
+            idat.extend(chunk)
+        pos += 12 + length
+    raw = zlib.decompress(bytes(idat))
+    rows = []
+    stride = width * 2 + 1
+    for y in range(height):
+        row = raw[y * stride + 1:(y + 1) * stride]
+        rows.append([struct.unpack(">H", row[x * 2:x * 2 + 2])[0] for x in range(width)])
+    return rows
+
+
+def depth_edge_metric(depth_path, threshold=6000):
+    """Fraction of adjacent depth pixels with a jump > threshold (0..1).
+
+    This is the 'depth-edge stretch metric' used to auto-limit parallax: faces
+    and hands sit on sharp depth edges, so a high value means camera travel
+    would smear detail. Pure function of the depth map.
+    """
+    rows = read_gray16(depth_path)
+    h = len(rows)
+    if h == 0:
+        return 1.0
+    w = len(rows[0])
+    edges = 0
+    total = 0
+    for y in range(h):
+        for x in range(w - 1):
+            total += 1
+            if abs(rows[y][x + 1] - rows[y][x]) > threshold:
+                edges += 1
+    if h > 1:
+        for y in range(h - 1):
+            for x in range(w):
+                total += 1
+                if abs(rows[y + 1][x] - rows[y][x]) > threshold:
+                    edges += 1
+    return edges / max(1, total)
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -236,6 +290,12 @@ def main():
 
     made = 0
     missing = 0
+    cached = 0
+    metrics = {"version": 1, "depthMode": args.depth, "scenes": []}
+    review_dir = os.path.join("out", "review")
+    os.makedirs(review_dir, exist_ok=True)
+    metrics_path = os.path.join(review_dir, "parallax-metrics.json")
+
     for scene in story.get("scenes", []):
         image = scene.get("image")
         if not image or not os.path.exists(image):
@@ -243,17 +303,41 @@ def main():
             print("[missing] %s: %s" % (scene.get("id"), image))
             continue
         out = depth_path_for(image)
-        if args.depth == "gradient":
-            w, h = gradient_depth(image, out)
-            print("[gradient] %s: wrote %s (%dx%d, 16-bit) -- FALLBACK" % (scene.get("id"), out, w, h))
+        digest = sha256_file(image)
+        # Cache by image hash: skip regeneration when depth exists + sidecar hash matches.
+        sidecar = out + ".sha256"
+        if os.path.exists(out) and os.path.exists(sidecar) and open(sidecar, "r", encoding="utf-8").read().strip() == digest:
+            print("[cache] %s: depth unchanged (%s)" % (scene.get("id"), digest[:12]))
+            cached += 1
         else:
-            w, h = model_depth(image, out)
-            print("[model] %s: wrote %s (%dx%d, 16-bit)" % (scene.get("id"), out, w, h))
+            if args.depth == "gradient":
+                w, h = gradient_depth(image, out)
+                print("[gradient] %s: wrote %s (%dx%d, 16-bit) -- FALLBACK" % (scene.get("id"), out, w, h))
+            else:
+                w, h = model_depth(image, out)
+                print("[model] %s: wrote %s (%dx%d, 16-bit)" % (scene.get("id"), out, w, h))
+            with open(sidecar, "w", encoding="utf-8") as f:
+                f.write(digest)
+            made += 1
         if args.layers:
             layer_split(image, os.path.splitext(image)[0])
-        made += 1
 
-    print("[done] depth maps written: %d; missing images skipped: %d" % (made, missing))
+        edge = depth_edge_metric(out)
+        motion = scene.get("motion") or {}
+        metrics["scenes"].append({
+            "scene": scene.get("id"),
+            "imageSha256": digest,
+            "depthEdgeMetric": round(edge, 5),
+            "requestedAmplitude": motion.get("amplitude", 1),
+            "direction": motion.get("direction", "left"),
+            "camera": scene.get("camera", "static"),
+            "note": "limit factor = clamp(1 - edge/0.35); see remotion/lib/parallelax-safety.ts",
+        })
+
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2)
+    print("[done] depth written: %d, cached: %d, missing images skipped: %d" % (made, cached, missing))
+    print("[done] parallax metrics: %s" % metrics_path)
     if missing and not args.allow_missing:
         print("[error] missing source images; re-run with --allow-missing to skip them.")
         sys.exit(6)
