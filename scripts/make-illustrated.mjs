@@ -101,6 +101,31 @@ export async function main(argv = process.argv.slice(2)) {
   // Asset manifest — fail loudly unless --allow-missing.
   const report = checkIllustratedAssets(story, { allowMissing: args.allowMissing });
   for (const line of formatManifest(report)) console.log(line);
+
+  // Intake manifest gate: real renders require a reviewed, fully-logged manifest.
+  // --allow-missing is the explicit escape hatch for fixture/dry runs.
+  const intakeManifestPath = path.join(ROOT, 'assets-src/illustrations/manifest.json');
+  if (!args.allowMissing) {
+    if (!fs.existsSync(intakeManifestPath)) {
+      throw new Error(
+        `Missing ${intakeManifestPath}. Run: node scripts/intake-illustrations.mjs <folder> ` +
+        `--tool "<tool>" --license-terms-url <url> --prompt-file docs/ILLUSTRATION_PROMPTS.md, ` +
+        `then review each scene (docs/IMAGE_REVIEW_CHECKLIST.md). Or pass --allow-missing for fixtures.`
+      );
+    }
+    const im = JSON.parse(fs.readFileSync(intakeManifestPath, 'utf8'));
+    const { isManifestEntryReady, REQUIRED_MANIFEST_FIELDS } = await import('./lib/image-check.mjs');
+    const bad = (im.scenes || []).filter((e) => !isManifestEntryReady(e));
+    if (bad.length > 0) {
+      const detail = bad.slice(0, 5).map((e) =>
+        `scene ${e.scene}: reviewed=${e.reviewed}, missing=[${REQUIRED_MANIFEST_FIELDS.filter((k) => !e[k] || !String(e[k]).trim()).join(', ')}]`
+      ).join('\n  ');
+      throw new Error(`Intake manifest incomplete for ${bad.length} scene(s); final render refuses:\n  ${detail}`);
+    }
+    console.log('[Assert] Intake manifest complete and all scenes reviewed:true.');
+  } else {
+    console.log('[warn] --allow-missing: intake manifest review gate skipped (fixture/dry run).');
+  }
   stageAssets(story, report);
 
   // Generate voice into a style-specific file (never clobbers the 3D voice).
