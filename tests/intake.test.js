@@ -56,6 +56,7 @@ test('manifest readiness requires all fields + reviewed:true', () => {
   const complete = {
     scene: 1, reviewed: true, tool: 'X', date: '2026-11-17',
     prompt: 'p', licenseTermsUrl: 'https://x',
+    watermarkCheck: true, matchesNarration: true, // Round 9 required checklist flags
   };
   assert.equal(isManifestEntryReady(complete), true);
   assert.equal(isManifestEntryReady({ ...complete, reviewed: false }), false);
