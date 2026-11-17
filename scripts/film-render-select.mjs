@@ -75,7 +75,8 @@ export async function main(argv = process.argv.slice(2)) {
   const parallaxMetrics = {};
   for (const m of realMetrics.scenes || []) parallaxMetrics[m.scene] = m.depthEdgeMetric;
 
-  const outDir = path.resolve(ROOT, 'build/preview/round9');
+  // Round 10 item 7: frames into out/review/draft-frames/ (review deliverable).
+  const outDir = path.resolve(ROOT, 'out/review/draft-frames');
   fs.mkdirSync(outDir, { recursive: true });
 
   const serveUrl = await bundle({ entryPoint: path.join(ROOT, 'remotion/index.ts'), publicDir: path.join(ROOT, 'public'), onProgress: () => {} });
@@ -142,7 +143,25 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const sheet = path.join(outDir, 'before-after-contact.png');
   tileContactSheet({ inputs: cells, output: sheet, cols: 2, cellWidth: 480 });
-  fs.writeFileSync(path.join(outDir, 'timing.json'), JSON.stringify({ configHash: configHash(cfg), timing }, null, 2) + '\n', 'utf8');
+
+  // Round 10 item 7: probe the actual output for resolution / codec / duration.
+  const { spawnSync } = await import('node:child_process');
+  const probe = (file) => {
+    const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const r = spawnSync(npx, ['remotion', 'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height,codec_name,nb_frames:format=duration', '-of', 'json', file],
+      { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32', maxBuffer: 4 * 1024 * 1024 });
+    try {
+      const o = r.stdout || '';
+      const j = JSON.parse(o.slice(o.indexOf('{'), o.lastIndexOf('}') + 1));
+      const s = (j.streams || [])[0] || {};
+      return { width: s.width, height: s.height, codec: s.codec_name, frames: s.nb_frames, duration: j.format?.duration };
+    } catch { return { error: 'ffprobe failed' }; }
+  };
+  const outProbe = probe(merged);
+  console.log(`[render-select] ffprobe: ${JSON.stringify(outProbe)}`);
+  fs.writeFileSync(path.join(outDir, 'timing.json'),
+    JSON.stringify({ configHash: configHash(cfg), timing, output: outProbe, mergedBytes: fs.statSync(merged).size }, null, 2) + '\n', 'utf8');
 
   const honesty = [
     'REAL DRAFT RENDER — what I could NOT judge:',
@@ -151,6 +170,8 @@ export async function main(argv = process.argv.slice(2)) {
     '- Scene 1 and 7 are world3d (3D Angkor set), NOT illustrations — per the story JSON; scene 4 is an illustration with labeled gradient depth.',
     '- Depth is a horizon-based gradient fallback (labeled), not a learned Depth Anything map (torch unavailable on Python 3.14).',
     '- No music present in assets-src/music/ — render is voice-only (honest).',
+    '- Before/after frames are BYTE-IDENTICAL for scenes 1 and 7 (world3d): the parallax limiter does not affect the 3D set renderer. Only scene 4 (illustration) shows a parallax difference.',
+    '- edgeMetric is 0.0 for all scenes (gradient depth = smooth ramp, no hard edges), so the safety limiter never reduces motion — verified with synthetic fixtures (hard-step edge gives >0).',
   ].join('\n') + '\n';
   fs.writeFileSync(path.join(outDir, 'honesty.txt'), honesty, 'utf8');
   console.log(`[render-select] before/after sheet: ${sheet}`);
