@@ -123,24 +123,20 @@ async function main() {
   console.log('[3/5] Rendering the full video twice (independent runs)...');
   const run1 = path.join(OUT_DIR, 'determinism-run1.mp4');
   const run2 = path.join(OUT_DIR, 'determinism-run2.mp4');
-  await renderMedia({
+  const renderOpts = {
     composition,
     serveUrl,
     codec: 'h264',
     gl: GL_BACKEND,
-    outputLocation: run1,
+    // A fixed, slower x264 preset avoids multithreaded-lookahead bitstream
+    // variance on longer compositions (e.g. the illustrated film), so two
+    // independent renders of identical frames produce byte-identical MP4s.
+    x264Preset: 'slower',
     ...(inputProps ? { inputProps } : {}),
     onProgress: () => {},
-  });
-  await renderMedia({
-    composition,
-    serveUrl,
-    codec: 'h264',
-    gl: GL_BACKEND,
-    outputLocation: run2,
-    ...(inputProps ? { inputProps } : {}),
-    onProgress: () => {},
-  });
+  };
+  await renderMedia({ ...renderOpts, outputLocation: run1 });
+  await renderMedia({ ...renderOpts, outputLocation: run2 });
   const videoHash1 = sha256(run1);
   const videoHash2 = sha256(run2);
   const videoIdentical = videoHash1 === videoHash2;

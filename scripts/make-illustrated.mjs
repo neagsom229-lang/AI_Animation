@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { buildSlideshowList, buildAudioList } from './storyboard.mjs';
 import { renderMedia, selectComposition, renderStill } from '@remotion/renderer';
 import { getOrCreateBundle } from './lib/bundle-cache.mjs';
 import { resolveBrowser } from './lib/browser.mjs';
@@ -170,6 +171,36 @@ export async function main(argv = process.argv.slice(2)) {
       stills.push(out);
     }
     tileContactSheet({ inputs: stills, output: path.join(sbDir, 'contact.png'), cols: 3, cellWidth: 480 });
+
+    // Voice animatic: hold each still for its scene's audio duration + voice.
+    const slides = timeline.scenes.map((sc, i) => ({ file: stills[i], seconds: sc.audioDurationInFrames / 30 }));
+    const listFile = path.join(sbDir, 'slides.txt');
+    fs.writeFileSync(listFile, buildSlideshowList(slides), 'utf8');
+    const silentVideo = path.join(sbDir, 'stills-video.mp4');
+    const ff = (args) => execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      ['remotion', 'ffmpeg', ...args], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+        shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+    try {
+      ff(['-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', listFile,
+        '-vf', 'scale=640:360', '-vsync', 'vfr', '-pix_fmt', 'yuv420p', silentVideo]);
+      const audioFiles = voiceData.scenes.flatMap((sc) => (sc.lines || []).map((l) => path.resolve(ROOT, 'public', l.file)))
+        .filter((f) => fs.existsSync(f));
+      const animatic = path.join(sbDir, 'storyboard-animatic.mp4');
+      if (audioFiles.length > 0) {
+        const audioList = path.join(sbDir, 'audio.txt');
+        fs.writeFileSync(audioList, buildAudioList(audioFiles), 'utf8');
+        const voiceTrack = path.join(sbDir, 'voice-track.mp4');
+        ff(['-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', audioList, '-c:a', 'aac', '-f', 'mp4', voiceTrack]);
+        ff(['-y', '-v', 'error', '-i', silentVideo, '-i', voiceTrack, '-c:v', 'copy', '-c:a', 'aac', '-shortest', animatic]);
+        for (const f of [audioList, voiceTrack]) { try { fs.unlinkSync(f); } catch { /* best effort */ } }
+      } else {
+        fs.copyFileSync(silentVideo, animatic);
+      }
+      console.log(`[storyboard] animatic: ${animatic}`);
+      try { fs.unlinkSync(silentVideo); } catch { /* best effort */ }
+    } catch (err) {
+      console.log(`[storyboard] note: animatic ffmpeg step skipped (${String(err.message).split('\n')[0]}).`);
+    }
     console.log(`[storyboard] wrote ${stills.length} stills + contact.png in ${sbDir}`);
     const reaped = reapNewRemotionChrome(chromeBefore);
     if (reaped.killed > 0) console.log(`[preflight] reaped ${reaped.killed} browser(s).`);

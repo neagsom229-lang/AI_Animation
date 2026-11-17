@@ -149,6 +149,8 @@ interface IllustratedFilmProps {
   allowMissing?: boolean;
   /** Per-scene asset presence, from scripts/illustrated-manifest.mjs. */
   assetStatus?: Record<string, { image: boolean; depth: boolean; clip: boolean }>;
+  /** True when the declared music file exists (else skipped/logged). */
+  musicPresent?: boolean;
   englishSubtitles?: boolean;
 }
 
@@ -160,6 +162,7 @@ export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
   isVertical,
   allowMissing,
   assetStatus,
+  musicPresent,
   englishSubtitles,
 }) => {
   const { fps } = useVideoConfig();
@@ -185,7 +188,7 @@ export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
   const timeline = buildIllustratedTimeline(voiceData, fps);
   const sceneSpecs = story.scenes || [];
   const captionLanguage = (story.subtitleLanguage && englishSubtitles) ? 'en' : 'km';
-  const musicPath = story.music ? publicAssetPath(story.music) : null;
+  const musicPath = story.music && musicPresent ? publicAssetPath(story.music) : null;
   const voiceSpans = timeline.scenes.flatMap((s) =>
     s.lines.map((l) => ({ start: l.startFrame, end: l.startFrame + l.durationInFrames }))
   );

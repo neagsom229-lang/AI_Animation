@@ -21,6 +21,7 @@ export const DEPTH_STRENGTH = 0.06;
  */
 export const MAX_OFFSET = 0.12;
 export function depthToOffset(depth01: number, strength = 1): number {
+  if (!Number.isFinite(depth01)) return 0;
   const d = Math.min(1, Math.max(0, depth01));
   const centred = d - 0.5;
   const scaled = centred * 2 * MAX_OFFSET * strength;
@@ -30,6 +31,7 @@ export function depthToOffset(depth01: number, strength = 1): number {
 /** Vertex shader displacement (z), bounded to avoid perspective stretching. */
 export const MAX_Z = 0.18;
 export function depthToZ(depth01: number, strength = 1): number {
+  if (!Number.isFinite(depth01)) return 0;
   const d = Math.min(1, Math.max(0, depth01));
   return (d - 0.5) * 2 * MAX_Z * strength;
 }
