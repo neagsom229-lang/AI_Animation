@@ -195,17 +195,21 @@ export async function main(argv = process.argv.slice(2)) {
   // Load parallax safety metrics if depth.py produced them.
   const metricsPath = path.join(ROOT, 'out/review/parallax-metrics.json');
   const parallaxMetrics = {};
+  const limitFactors = {};
   if (fs.existsSync(metricsPath)) {
     try {
       const pm = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
-      for (const s of pm.scenes || []) parallaxMetrics[s.scene] = s.depthEdgeMetric;
-      console.log(`[parallax] loaded ${Object.keys(parallaxMetrics).length} depth-edge metric(s) — motion auto-limited.`);
+      for (const s of pm.scenes || []) {
+        parallaxMetrics[s.scene] = s.depthEdgeMetric;
+        if (s.limitFactor !== undefined) limitFactors[s.scene] = s.limitFactor;
+      }
+      console.log(`[parallax] loaded ${Object.keys(parallaxMetrics).length} metric(s), ${Object.keys(limitFactors).length} rank-based limit factor(s) — motion auto-limited.`);
     } catch { console.log('[warn] parallax-metrics.json unreadable; using full parallax (no limit).'); }
   }
   const inputProps = {
     story, voiceData, assetStatus, musicPresent, allowMissing: args.allowMissing,
     isMock: args.mock, isDraft: args.draft, isVertical: args.vertical,
-    englishSubtitles: args.englishSubtitles, parallaxMetrics,
+    englishSubtitles: args.englishSubtitles, parallaxMetrics, limitFactors,
   };
 
   // Preflight + browser + bundle.

@@ -73,7 +73,12 @@ export async function main(argv = process.argv.slice(2)) {
   const metricsPath = path.resolve(ROOT, 'out/review/parallax-metrics.json');
   const realMetrics = fs.existsSync(metricsPath) ? JSON.parse(fs.readFileSync(metricsPath, 'utf8')) : { scenes: [] };
   const parallaxMetrics = {};
-  for (const m of realMetrics.scenes || []) parallaxMetrics[m.scene] = m.depthEdgeMetric;
+  const realLimitFactors = {};
+  for (const m of realMetrics.scenes || []) {
+    parallaxMetrics[m.scene] = m.depthEdgeMetric;
+    if (m.limitFactor !== undefined) realLimitFactors[m.scene] = m.limitFactor;
+  }
+  console.log(`[render-select] limit factors: ${JSON.stringify(realLimitFactors)}`);
 
   // Round 10 item 7: frames into out/review/draft-frames/ (review deliverable).
   const outDir = path.resolve(ROOT, 'out/review/draft-frames');
@@ -91,7 +96,7 @@ export async function main(argv = process.argv.slice(2)) {
     const spec = story.scenes[sceneNo - 1] || {};
     const inputProps = {
       story, voiceData, assetStatus, allowMissing: false,
-      isDraft: args.draft, parallaxMetrics, musicPresent: false,
+      isDraft: args.draft, parallaxMetrics, limitFactors: realLimitFactors, musicPresent: false,
     };
     const composition = await selectComposition({ serveUrl, id: 'IllustratedFilm', inputProps });
     const start = t.startFrame;
@@ -115,10 +120,11 @@ export async function main(argv = process.argv.slice(2)) {
     timing.push({ scene: sceneNo, media: (spec.media && spec.media.type) || 'illustration', frames: t.durationInFrames, seconds: Number((t.durationInFrames / cfg.fps).toFixed(2)), ms: Math.round(ms), msPerFrame: Number(mspf.toFixed(1)), bytes, sizeMB: Number((bytes / 1e6).toFixed(2)) });
     console.log(`[render-select] scene ${sceneNo}: ${t.durationInFrames} frames in ${(ms / 1000).toFixed(1)}s = ${mspf.toFixed(1)} ms/frame, ${(bytes / 1e6).toFixed(2)} MB, media=${(spec.media && spec.media.type) || 'illustration'}`);
 
-    // 3 frames each: before (parallax suppressed) and after (real parallax).
+    // 3 frames each. before = full camera travel (limitFactor 1.0, no limiter);
+    // after = the real rank-based limitFactor from the metrics.
     const picks = [start, start + Math.floor(t.durationInFrames / 2), end];
-    for (const [label, pm] of [['before', { ...parallaxMetrics, [t.id]: 1 }], ['after', parallaxMetrics]]) {
-      const p = { ...inputProps, parallaxMetrics: pm };
+    for (const [label, lf] of [['before', 1.0], ['after', realLimitFactors[t.id] ?? 1.0]]) {
+      const p = { ...inputProps, limitFactors: { ...realLimitFactors, [t.id]: lf } };
       const c = await selectComposition({ serveUrl, id: 'IllustratedFilm', inputProps: p });
       for (let k = 0; k < picks.length; k += 1) {
         const f = path.join(outDir, `s${sceneNo}-${label}-${k}.png`);

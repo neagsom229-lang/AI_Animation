@@ -51,7 +51,7 @@ import {
   type CameraMove,
 } from '../lib/illustrated-motion.ts';
 import { publicAssetPath, depthPathFor } from '../lib/illustrated-assets.ts';
-import { limitParallax, type MotionOverride } from '../lib/parallelax-safety.ts';
+import { limitParallax, clampCameraTravel, type MotionOverride } from '../lib/parallelax-safety.ts';
 import {
   DEPTH_STRENGTH,
   PLANE_SEGMENTS_X,
@@ -159,8 +159,10 @@ interface IllustratedFilmProps {
   /** True when the declared music file exists (else skipped/logged). */
   musicPresent?: boolean;
   englishSubtitles?: boolean;
-  /** Per-scene depth-edge metric from scripts/depth.py (parallax-metrics.json). */
+  /** Per-scene depth-edge metric from scripts/depth.py (legacy). */
   parallaxMetrics?: Record<string, number>;
+  /** Round 11: per-scene rank-based limitFactor from parallax-metrics.json [0.4,1]. */
+  limitFactors?: Record<string, number>;
 }
 
 export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
@@ -174,6 +176,7 @@ export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
   musicPresent,
   englishSubtitles,
   parallaxMetrics,
+  limitFactors,
 }) => {
   const { fps } = useVideoConfig();
   const [fontHandle] = React.useState(() => delayRender('Loading Hanuman subtitle font'));
@@ -240,6 +243,7 @@ export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
               englishSubtitles={Boolean(englishSubtitles)}
               allowMissing={Boolean(allowMissing)}
               depthEdge={parallaxMetrics ? parallaxMetrics[scene.id] : undefined}
+              limitFactor={limitFactors ? limitFactors[scene.id] : undefined}
             />
           </Sequence>
         );
@@ -283,9 +287,14 @@ const World3DScene: React.FC<{
   rig: CameraRigType;
   mood: string;
   isDraft: boolean;
-}> = ({ frame, fps, durationInFrames, shot, rig, mood, isDraft }) => {
+  /** Round 11 item 2: world3d camera-travel limiter. */
+  limitFactor?: number;
+}> = ({ frame, fps, durationInFrames, shot, rig, mood, isDraft, limitFactor = 1 }) => {
   const pose = getShotPose(shot, rig, frame, fps, durationInFrames);
-  const rot = lookAtQuaternion(pose.position, pose.lookAt);
+  // Clamp camera travel toward the shot's start pose using the same limitFactor.
+  const startPose = getShotPose(shot, rig, 0, fps, durationInFrames);
+  const clamped = clampCameraTravel(pose.position, startPose.position, limitFactor);
+  const rot = lookAtQuaternion(clamped, pose.lookAt);
   const preset = React.useMemo(() => resolveMood(mood), [mood]);
   const w = isDraft ? 1280 : 1920;
   const h = isDraft ? 720 : 1080;
@@ -293,7 +302,7 @@ const World3DScene: React.FC<{
     <ThreeCanvas width={w} height={h} shadows gl={{ antialias: false }}>
       <SceneWorld preset={preset} world="khmer-temple" quality={isDraft ? 'draft' : 'final'} />
       <PerspectiveCamera makeDefault fov={shotFov(shot)} near={0.1} far={1000}
-        position={pose.position} quaternion={rot} />
+        position={clamped} quaternion={rot} />
     </ThreeCanvas>
   );
 };
@@ -308,7 +317,9 @@ const IllustratedScene: React.FC<{
   englishSubtitles: boolean;
   allowMissing: boolean;
   depthEdge?: number;
-}> = ({ scene, spec, status, fps, isDraft, captionLanguage, englishSubtitles, allowMissing, depthEdge }) => {
+  /** Round 11 rank-based factor from metrics (overrides computed factor). */
+  limitFactor?: number;
+}> = ({ scene, spec, status, fps, isDraft, captionLanguage, englishSubtitles, allowMissing, depthEdge, limitFactor }) => {
   // Local frames inside <Sequence>.
   const frame = useCurrentFrame();
   const dur = scene.durationInFrames;
@@ -325,10 +336,11 @@ const IllustratedScene: React.FC<{
   const depthPath = spec.image ? publicAssetPath(depthPathFor(spec.image)) : null;
   const canParallax = mediaType === 'illustration' && Boolean(imagePath && status.image && status.depth);
   const isPlaceholder = !useClip && !canParallax && !isWorld3d;
-  // Safety-limited parallax amplitude: depth edges + per-scene motion override.
-  const safety = limitParallax(depthEdge ?? 0, spec.motion as MotionOverride | undefined, spec.camera);
-  const amplitude = safety.factor > 0 ? (safety.amplitude / Math.max(0.0001, 0.10)) * (spec.motion?.amplitude ?? 1) : 0;
-  // Clamp to [0,1]; the limitParallax ceiling guarantees no over-stretch.
+  // Round 11: rank-based limitFactor (from metrics) overrides the computed
+  // depth-edge factor for BOTH the parallax plane and the world3d camera.
+  const computed = limitParallax(depthEdge ?? 0, spec.motion as MotionOverride | undefined, spec.camera);
+  const factor = Number.isFinite(limitFactor) ? Math.min(1, Math.max(0.4, limitFactor!)) : computed.factor;
+  const amplitude = (computed.amplitude / Math.max(0.0001, 0.10)) * (spec.motion?.amplitude ?? 1) * (factor / Math.max(0.0001, computed.factor));
   const safeAmplitude = Math.min(1, Math.max(0, amplitude));
 
   // Subtitle text from narration (km spoken, gloss in English).
@@ -355,6 +367,7 @@ const IllustratedScene: React.FC<{
             rig={(spec.camera === 'crane' || spec.camera === 'orbit' || spec.camera === 'dolly' ? spec.camera : 'crane') as CameraRigType}
             mood={spec.mood || 'warm dawn'}
             isDraft={isDraft}
+            limitFactor={factor}
           />
         ) : useClip ? (
           <OffthreadVideo muted src={staticFile(clipPath!)} style={{ width:'100%', height:'100%', objectFit:'cover' }} />

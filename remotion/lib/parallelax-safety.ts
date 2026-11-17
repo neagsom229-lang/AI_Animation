@@ -8,6 +8,25 @@
  * @module remotion/lib/parallelax-safety
  */
 
+/**
+ * Round 11 item 2: clamp world3d camera travel by the same limitFactor.
+ * Given the full pose and the pose at the shot's start frame, interpolate the
+ * camera position toward the start position by (1 - limitFactor): factor 1 =>
+ * full travel, factor 0.4 => only 40% of the travel. Pure.
+ */
+export function clampCameraTravel(
+  full: readonly [number, number, number],
+  start: readonly [number, number, number],
+  limitFactor: number
+): [number, number, number] {
+  const f = Math.min(1, Math.max(0, Number.isFinite(limitFactor) ? limitFactor : 1));
+  return [
+    start[0] + (full[0] - start[0]) * f,
+    start[1] + (full[1] - start[1]) * f,
+    start[2] + (full[2] - start[2]) * f,
+  ];
+}
+
 /** Hard ceiling on camera move amplitude regardless of override. */
 export const ABSOLUTE_MAX_AMPLITUDE = 0.10;
 /** Absolute ceiling on texture-offset amplitude. */
