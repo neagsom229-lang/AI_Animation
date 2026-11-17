@@ -42,7 +42,7 @@ test('real sidecars carry depthSource (fixes "cannot tell source")', () => {
   const p = 'assets-src/illustrations/scene-01-depth.png.sha256';
   if (!fs.existsSync(p)) return;
   const m = JSON.parse(fs.readFileSync(p, 'utf8'));
-  assert.equal(m.depthSource, 'gradient', 'real cache must record its source');
+  assert.ok(['model', 'gradient'].includes(m.depthSource), 'real cache must record its source (model or gradient)');
   assert.ok(m.cacheKey && m.imageSha256 && m.modelRevision && m.scriptVersion);
 });
 

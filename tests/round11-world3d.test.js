@@ -35,5 +35,5 @@ test('world3d scenes have varied limitFactors from real metrics (limiter engages
 test('composition wires clampCameraTravel into World3DScene', () => {
   const src = fs.readFileSync('remotion/compositions/IllustratedFilm.tsx', 'utf8');
   assert.ok(src.includes('clampCameraTravel'), 'World3D must use the clamp');
-  assert.ok(src.includes('limitFactor={safety.factor}'), 'limiter factor must reach World3DScene');
+  assert.ok(src.includes('limitFactor={factor}'), 'limiter factor must reach World3DScene');
 });
