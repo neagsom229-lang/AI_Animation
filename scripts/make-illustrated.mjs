@@ -255,9 +255,21 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  // Per-scene cached render + stitch.
+  // Per-scene cached render + stitch, with a state file for crash/OOM resume.
   const cacheDir = path.resolve(ROOT, 'out/.illustrated-scene-cache');
   fs.mkdirSync(cacheDir, { recursive: true });
+  const stateFile = path.join(cacheDir, `${storyName}.state.json`);
+  const resumeState = {
+    story: args.story, scenes: timeline.scenes.length,
+    started: new Date().toISOString(), finished: {}, lastHash: null,
+  };
+  const hadState = fs.existsSync(stateFile);
+  if (hadState) {
+    try { Object.assign(resumeState.finished, JSON.parse(fs.readFileSync(stateFile, 'utf8')).finished || {}); }
+    catch { /* ignore unreadable state */ }
+    console.log(`[resume] found state file with ${Object.keys(resumeState.finished).length} finished scene(s).`);
+  }
+  const saveState = () => fs.writeFileSync(stateFile, JSON.stringify(resumeState, null, 2) + '\n', 'utf8');
   const outFile = path.resolve(ROOT, `out/${storyName}${args.draft ? '-draft' : ''}${args.vertical ? '-vertical' : ''}.mp4`);
   const sceneFiles = [];
   let rendered = 0;
@@ -276,6 +288,8 @@ export async function main(argv = process.argv.slice(2)) {
     if (fs.existsSync(file) && fs.statSync(file).size > 0) {
       console.log(`[scene-cache] ${scene.id}: HIT ${hash}`);
       cached += 1;
+      resumeState.finished[scene.id] = hash;
+      saveState();
       continue;
     }
     const start = scene.startFrame;
@@ -290,6 +304,9 @@ export async function main(argv = process.argv.slice(2)) {
     });
     console.log(`\n[scene-cache]   ${scene.id} in ${((Date.now() - s0) / 1000).toFixed(1)}s`);
     rendered += 1;
+    resumeState.finished[scene.id] = hash;
+    resumeState.lastHash = hash;
+    saveState(); // checkpoint after every scene so a crash resumes cleanly
   }
 
   console.log('[stitch] joining scene MP4s…');
