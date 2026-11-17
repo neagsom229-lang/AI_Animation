@@ -15,6 +15,7 @@ service-account*.json
 # Dependencies and local environments
 node_modules/
 .venv/
+.venv-depth/
 venv/
 __pycache__/
 *.py[cod]

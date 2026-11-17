@@ -160,48 +160,59 @@ def read_gray16(path):
 
 # --- Round 10 item 1: normalized depth statistics --------------------------
 
-SOBEL_THRESHOLD = 0.08   # edgeMetric: fraction of pixels with |Sobel| > 0.08 (normalized depth)
+SOBEL_THRESHOLD = 0.08   # legacy edgeMetric: fraction with |Sobel| > 0.08
+SHARP_FRACTION_CUT = 0.02  # Round 11: sharpFraction = fraction with |Sobel| > 0.02
 FLAT_DEPTH_RANGE = 0.15  # flatDepth: p95 - p5 < 0.15
 
 
-def depth_statistics(depth_path, threshold=SOBEL_THRESHOLD):
-    """Compute edgeMetric, depthRange, flatDepth from a 16-bit depth PNG.
+def _p95(values):
+    """95th percentile of a sorted list (nearest-rank). Pure."""
+    if not values:
+        return 0.0
+    s = sorted(values)
+    return s[min(len(s) - 1, int(len(s) * 0.95))]
 
-    All math is on depth normalized to 0..1 (value / 65535).
-      * edgeMetric = fraction of interior pixels whose LOCAL depth gradient
-        magnitude (3x3 Sobel, divided by 8 so a full 0->1 step == 1.0) exceeds
-        `threshold` (0.08). Hard edges (faces/hands on a learned depth map)
-        raise it; a smooth gradient or a flat map yields ~0.
-      * depthRange = p95(depth) - p5(depth) of normalized values.
-      * flatDepth  = depthRange < 0.15 (little usable depth separation).
-    Returns dict with edgeMetric, depthRange, flatDepth, width, height.
+
+def depth_statistics(depth_path, threshold=SOBEL_THRESHOLD):
+    """Compute Round-11 depth statistics from a 16-bit depth PNG.
+
+    All math on depth normalized to 0..1 (value / 65535).
+      * sobelP95     = p95 of the 3x3 Sobel gradient MAGNITUDE (normalized).
+                       Replaces the old fraction-of-large-gradients metric because
+                       absolute fractions read ~0 for real model depth (0.0001-0.004).
+      * sharpFraction= fraction of pixels whose Sobel magnitude > 0.02.
+      * edgeMetric   = legacy fraction |Sobel| > threshold (kept for compatibility).
+      * depthRange   = p95(depth) - p5(depth); flatDepth = range < 0.15.
     """
     rows16 = read_gray16(depth_path)
     h = len(rows16)
     if h == 0:
-        return {"edgeMetric": 1.0, "depthRange": 0.0, "flatDepth": True, "width": 0, "height": 0}
+        return {"sobelP95": 0.0, "sharpFraction": 0.0, "edgeMetric": 0.0,
+                "depthRange": 0.0, "flatDepth": True, "width": 0, "height": 0}
     w = len(rows16[0])
     norm = [[v / 65535.0 for v in row] for row in rows16]
 
-    # Sobel on interior pixels (3x3), magnitude normalized by 8.
-    edges = 0
+    mags = []
+    legacy_edges = 0
     total = 0
     for y in range(1, h - 1):
         r0, r1, r2 = norm[y - 1], norm[y], norm[y + 1]
         for x in range(1, w - 1):
             gx = (-r0[x - 1] + r0[x + 1] - 2 * r1[x - 1] + 2 * r1[x + 1] - r2[x - 1] + r2[x + 1]) / 8.0
             gy = (r0[x - 1] + 2 * r0[x] + r0[x + 1] - r2[x - 1] - 2 * r2[x] - r2[x + 1]) / 8.0
+            mag = (gx * gx + gy * gy) ** 0.5
+            mags.append(mag)
             total += 1
-            if (gx * gx + gy * gy) ** 0.5 > threshold:
-                edges += 1
-    edge_metric = edges / max(1, total)
+            if mag > threshold:
+                legacy_edges += 1
+    sobel_p95 = _p95(mags)
+    sharp_fraction = sum(1 for m in mags if m > SHARP_FRACTION_CUT) / max(1, len(mags))
+    legacy_edge = legacy_edges / max(1, total)
 
-    # Percentiles on a coarse histogram (256 bins) — deterministic, cheap.
     hist = [0] * 256
     for row in norm:
         for v in row:
-            b = min(255, max(0, int(v * 255)))
-            hist[b] += 1
+            hist[min(255, max(0, int(v * 255)))] += 1
     count = sum(hist)
     def percentile(p):
         target = count * p
@@ -211,10 +222,11 @@ def depth_statistics(depth_path, threshold=SOBEL_THRESHOLD):
             if acc >= target:
                 return b / 255.0
         return 1.0
-    p5, p95 = percentile(0.05), percentile(0.95)
-    depth_range = p95 - p5
+    depth_range = percentile(0.95) - percentile(0.05)
     return {
-        "edgeMetric": round(edge_metric, 6),
+        "sobelP95": round(sobel_p95, 6),
+        "sharpFraction": round(sharp_fraction, 6),
+        "edgeMetric": round(legacy_edge, 6),
         "depthRange": round(depth_range, 6),
         "flatDepth": depth_range < FLAT_DEPTH_RANGE,
         "width": w,
@@ -223,8 +235,33 @@ def depth_statistics(depth_path, threshold=SOBEL_THRESHOLD):
 
 
 def depth_edge_metric(depth_path, threshold=SOBEL_THRESHOLD):
-    """Backward-compatible wrapper: returns only edgeMetric (Round 10 definition)."""
+    """Backward-compatible wrapper: returns the legacy edgeMetric."""
     return depth_statistics(depth_path, threshold)["edgeMetric"]
+
+
+def rank_limit_factors(sharp_values):
+    """Round 11: derive per-scene limitFactor from sharpness RANK within story.
+
+    Sharpest 25% of scenes -> factor in [0.6, 0.8] (linear, sharpest = 0.6).
+    Remaining 75%             -> factor in [0.9, 1.0] (linear, least sharp = 1.0).
+    Clamped to [0.4, 1.0]. Returns a list of factors in the SAME order as input.
+    """
+    n = len(sharp_values)
+    if n == 0:
+        return []
+    order = sorted(range(n), key=lambda i: sharp_values[i], reverse=True)  # sharpest first
+    factors = [1.0] * n
+    top = max(1, int(round(n * 0.25)))
+    for rank, idx in enumerate(order):
+        if rank < top:
+            # sharpest -> 0.6, least-sharp of the top quartile -> 0.8
+            f = 0.6 + 0.2 * (rank / max(1, top - 1)) if top > 1 else 0.6
+        else:
+            # first of the rest -> 0.9, least sharp -> 1.0
+            r2 = (rank - top) / max(1, n - top - 1)
+            f = 0.9 + 0.1 * r2
+        factors[idx] = round(min(1.0, max(0.4, f)), 4)
+    return factors
 
 
 def sha256_file(path):
@@ -406,9 +443,6 @@ def main():
             layer_split(image, os.path.splitext(image)[0])
 
         stats = depth_statistics(out)
-        edge = stats["edgeMetric"]
-        # Round 10 item 1: limit factor clamped to [0.25, 1].
-        limit_factor = max(0.25, min(1.0, 1.0 - edge / 0.35))
         motion = scene.get("motion") or {}
         # Round 10 item 3: direction from camera move (not hardcoded "left").
         direction = motion.get("direction") or direction_from_camera(scene.get("camera", "static"))
@@ -416,21 +450,42 @@ def main():
         # otherwise falls back to the mode requested this run (legacy plain sidecar).
         depth_source = _depth_source_from_sidecar(out, args.depth)
         flat_note = " FLAT DEPTH (range < 0.15): parallax has little separation." if stats["flatDepth"] else ""
-        print("[metrics] %s: edge=%.4f range=%.3f flat=%s source=%s%s" % (
-            scene.get("id"), edge, stats["depthRange"], stats["flatDepth"], depth_source, flat_note))
+        print("[metrics] %s: sobelP95=%.4f sharp=%.4f edge=%.4f range=%.3f flat=%s source=%s%s" % (
+            scene.get("id"), stats["sobelP95"], stats["sharpFraction"], stats["edgeMetric"],
+            stats["depthRange"], stats["flatDepth"], depth_source, flat_note))
         metrics["scenes"].append({
             "scene": scene.get("id"),
             "imageSha256": digest,
-            "depthEdgeMetric": edge,
+            "sobelP95": stats["sobelP95"],
+            "sharpFraction": stats["sharpFraction"],
+            "depthEdgeMetric": stats["edgeMetric"],  # legacy field, kept for compatibility
             "depthRange": stats["depthRange"],
             "flatDepth": stats["flatDepth"],
             "depthSource": depth_source,
-            "limitFactor": round(limit_factor, 4),
+            "limitFactor": 1.0,  # replaced below by rank-based factor
             "requestedAmplitude": motion.get("amplitude", 1),
             "direction": direction,
             "camera": scene.get("camera", "static"),
-            "note": "edgeMetric=frac(|Sobel|>0.08, depth normalized 0..1); depthRange=p95-p5; flatDepth=range<0.15; limit=clamp(1-edge/0.35,0.25,1)",
+            "note": "sobelP95=p95(|Sobel| on depth 0..1); sharpFraction=frac(|Sobel|>0.02); limit=rank(sharpness): sharpest25%->0.6-0.8 rest->0.9-1.0 clamp[0.4,1]",
         })
+
+    # Round 11 item 1: rank-based limit factors from sharpness (sobelP95).
+    sharp_values = [s["sobelP95"] for s in metrics["scenes"]]
+    factors = rank_limit_factors(sharp_values)
+    for s, f in zip(metrics["scenes"], factors):
+        s["limitFactor"] = f
+
+    def _mm(vals):
+        if not vals:
+            return "n/a"
+        s = sorted(vals)
+        return "min=%.4f median=%.4f max=%.4f" % (s[0], s[len(s) // 2], s[-1])
+    print("\n[summary] sobelP95   %s" % _mm(sharp_values))
+    print("[summary] sharpFrac  %s" % _mm([s["sharpFraction"] for s in metrics["scenes"]]))
+    print("[scene]  id        sobelP95  sharpFrac  limitFactor  source")
+    for s in metrics["scenes"]:
+        print("[scene]  %-9s %.4f    %.4f      %.2f        %s" % (
+            s["scene"], s["sobelP95"], s["sharpFraction"], s["limitFactor"], s["depthSource"]))
 
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
