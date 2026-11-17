@@ -59,6 +59,9 @@ import {
   depthToZ,
 } from '../lib/illustrated-depth.ts';
 import { getSubtitleText, SUBTITLE_LAYOUT } from '../lib/subtitles.ts';
+import { SceneWorld } from './SceneWorld';
+import { getShotPose, shotFov, lookAtQuaternion, type ShotType, type CameraRigType } from '../lib/camera.ts';
+import { resolveMood } from '../../src/render/moods.js';
 
 const VERT = `
   uniform sampler2D uDepth;
@@ -271,6 +274,30 @@ export const IllustratedFilm: React.FC<IllustratedFilmProps> = ({
   );
 };
 
+/** Phase 4 hybrid: an establishing/aerial shot using the existing Angkor 3D set (no characters). */
+const World3DScene: React.FC<{
+  frame: number;
+  fps: number;
+  durationInFrames: number;
+  shot: ShotType;
+  rig: CameraRigType;
+  mood: string;
+  isDraft: boolean;
+}> = ({ frame, fps, durationInFrames, shot, rig, mood, isDraft }) => {
+  const pose = getShotPose(shot, rig, frame, fps, durationInFrames);
+  const rot = lookAtQuaternion(pose.position, pose.lookAt);
+  const preset = React.useMemo(() => resolveMood(mood), [mood]);
+  const w = isDraft ? 1280 : 1920;
+  const h = isDraft ? 720 : 1080;
+  return (
+    <ThreeCanvas width={w} height={h} shadows gl={{ antialias: false }}>
+      <SceneWorld preset={preset} world="khmer-temple" quality={isDraft ? 'draft' : 'final'} />
+      <PerspectiveCamera makeDefault fov={shotFov(shot)} near={0.1} far={1000}
+        position={pose.position} quaternion={rot} />
+    </ThreeCanvas>
+  );
+};
+
 const IllustratedScene: React.FC<{
   scene: IllustratedTimedScene;
   spec: any;
@@ -290,12 +317,14 @@ const IllustratedScene: React.FC<{
   const w = isDraft ? 1280 : 1920;
   const h = isDraft ? 720 : 1080;
 
+  const mediaType = (spec.media && spec.media.type) || (spec.clip ? 'clip' : 'illustration');
   const clipPath = spec.clip ? publicAssetPath(spec.clip) : null;
-  const useClip = Boolean(clipPath && status.clip);
+  const useClip = mediaType === 'clip' && Boolean(clipPath && status.clip);
+  const isWorld3d = mediaType === 'world3d';
   const imagePath = spec.image ? publicAssetPath(spec.image) : null;
   const depthPath = spec.image ? publicAssetPath(depthPathFor(spec.image)) : null;
-  const canParallax = Boolean(imagePath && status.image && status.depth);
-  const isPlaceholder = !useClip && !canParallax;
+  const canParallax = mediaType === 'illustration' && Boolean(imagePath && status.image && status.depth);
+  const isPlaceholder = !useClip && !canParallax && !isWorld3d;
   // Safety-limited parallax amplitude: depth edges + per-scene motion override.
   const safety = limitParallax(depthEdge ?? 0, spec.motion as MotionOverride | undefined);
   const amplitude = safety.factor > 0 ? (safety.amplitude / Math.max(0.0001, 0.10)) * (spec.motion?.amplitude ?? 1) : 0;
@@ -317,7 +346,17 @@ const IllustratedScene: React.FC<{
   return (
     <AbsoluteFill style={{ opacity: fadeOpacity }}>
       <AbsoluteFill style={{ backgroundColor: '#1a1712' }}>
-        {useClip ? (
+        {isWorld3d ? (
+          <World3DScene
+            frame={frame}
+            fps={fps}
+            durationInFrames={dur}
+            shot={(spec.shot || 'wide') as ShotType}
+            rig={(spec.camera === 'crane' || spec.camera === 'orbit' || spec.camera === 'dolly' ? spec.camera : 'crane') as CameraRigType}
+            mood={spec.mood || 'warm dawn'}
+            isDraft={isDraft}
+          />
+        ) : useClip ? (
           <OffthreadVideo muted src={staticFile(clipPath!)} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
         ) : canParallax ? (
           <ThreeCanvas width={w} height={h} gl={{ antialias: false }}>

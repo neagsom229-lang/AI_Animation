@@ -19,6 +19,8 @@ export const ILLUSTRATED_CAMERA_MOVES = ['push-in', 'push-out', 'truck-left', 't
 export const ILLUSTRATED_FX = ['dust', 'god-rays', 'water', 'grass', 'smoke', 'birds', 'fireflies', 'grain', 'vignette', 'fire'];
 /** Transitions understood by the composition. */
 export const ILLUSTRATED_TRANSITIONS = ['crossfade', 'dip-to-black', 'none'];
+/** Media types a scene can use (Phase 4 hybrid). */
+export const ILLUSTRATED_MEDIA_TYPES = ['illustration', 'clip', 'world3d'];
 
 /**
  * Validate an illustrated story.
@@ -57,8 +59,19 @@ export function validateIllustratedStory(story) {
     if (typeof n.km !== 'string' || !n.km.trim()) throw new Error(`${where} (${scene.id}) narration.km must be non-empty.`);
     if (typeof n.en !== 'string' || !n.en.trim()) throw new Error(`${where} (${scene.id}) narration.en must be non-empty.`);
 
-    if (typeof scene.image !== 'string' || !scene.image.trim()) {
-      throw new Error(`${where} (${scene.id}) missing image path.`);
+    // media.type decides which renderer the scene uses (Phase 4 hybrid).
+    const mediaType = (scene.media && scene.media.type) || (scene.clip ? 'clip' : 'illustration');
+    if (!ILLUSTRATED_MEDIA_TYPES.includes(mediaType)) {
+      throw new Error(`${where} (${scene.id}) unknown media.type "${mediaType}". Valid: ${ILLUSTRATED_MEDIA_TYPES.join(', ')}.`);
+    }
+    if (mediaType === 'illustration' && (typeof scene.image !== 'string' || !scene.image.trim())) {
+      throw new Error(`${where} (${scene.id}) media.type illustration requires an image path.`);
+    }
+    if (mediaType === 'clip' && !(scene.clip && String(scene.clip).trim())) {
+      throw new Error(`${where} (${scene.id}) media.type clip requires a clip path.`);
+    }
+    if (mediaType === 'world3d' && scene.world && typeof scene.world !== 'string') {
+      throw new Error(`${where} (${scene.id}) media.world3d world name must be a string.`);
     }
     if (scene.clip !== undefined && scene.clip !== null && (typeof scene.clip !== 'string' || !scene.clip.trim())) {
       throw new Error(`${where} (${scene.id}) clip must be a path or null.`);

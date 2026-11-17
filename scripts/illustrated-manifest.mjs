@@ -48,12 +48,23 @@ export function checkIllustratedAssets(story, opts = {}) {
   const exists = (rel) => typeof rel === 'string' && rel.length > 0 && fs.existsSync(path.resolve(root, rel));
 
   const scenes = story.scenes.map((scene, i) => {
+    const mediaType = (scene.media && scene.media.type) || (scene.clip ? 'clip' : 'illustration');
+    // world3d scenes render the 3D set — they need no illustration/depth/clip.
+    if (mediaType === 'world3d') {
+      return {
+        index: i + 1, id: scene.id, mediaType,
+        image: true, depth: true, clip: true,
+        imagePath: null, depthPath: null, clipPath: null,
+        missing: [],
+      };
+    }
     const image = scene.image || null;
     const clip = scene.clip || null;
     const depth = depthPathFor(image);
     const entry = {
       index: i + 1,
       id: scene.id,
+      mediaType,
       image: image && exists(image),
       imagePath: image,
       depth: depth && exists(depth),
