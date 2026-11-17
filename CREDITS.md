@@ -183,6 +183,25 @@ Kept for provenance/inspection only — none of these are referenced by the film
 - Quaternius *Ultimate Animated Character* source files that were superseded by
   the optimised GLBs above.
 
+## 10. Illustrated film — depth model & tooling (added on `illustrated` branch)
+
+- **Depth Anything V2 Small** (`depth-anything/Depth-Anything-V2-Small-hf`) —
+  used by `scripts/depth.py --depth model` to generate 16-bit depth maps.
+  **License: Apache-2.0** (permissive, commercial use allowed), verified from
+  the model card https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf
+  on **2026-11-17** (card shows "License: apache-2.0"). NOT a non-commercial
+  checkpoint. `scripts/depth.py --license-check` re-asserts the allow-list.
+  Installed via `python -m pip install torch transformers Pillow numpy` (CPU).
+- **OpenCV** (`opencv-python-headless`, Apache-2.0) — optional `--layers`
+  inpainting for parallax masks. Installed via `python -m pip`.
+- **Gradient depth fallback** — no third-party asset, pure Python; produces a
+  labeled horizon-based depth map (`--depth gradient`), never passed off as a
+  learned map.
+- **Illustrations** (`assets-src/illustrations/scene-XX.png`) are user-generated
+  from `docs/ILLUSTRATION_PROMPTS.md`; the generating tool/model, its license,
+  prompt and date must be logged here per image before shipping (CC0/CC-BY or a
+  license recorded in this file). None are shipped yet.
+
 ## Channels that failed and were NOT silently substituted
 
 - **itch.io Quaternius pages** (e.g. https://quaternius.itch.io/universal-base-characters):
