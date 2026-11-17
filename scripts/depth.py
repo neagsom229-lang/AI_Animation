@@ -47,6 +47,22 @@ MODEL_CARD_URL = "https://huggingface.co/" + MODEL_ID
 PERMISSIVE_LICENSES = {"apache-2.0", "cc0-1.0", "cc-by-4.0", "mit"}
 DEPTH_PIP = ["torch", "transformers", "Pillow", "numpy"]
 LAYER_PIP = ["opencv-python-headless", "numpy", "Pillow"]
+# Round 10 item 2: cache identity. Bump SCRIPT_VERSION when the depth algorithm
+# or metric changes so every cached map is invalidated.
+SCRIPT_VERSION = "round10-cache-v1"
+# Pinned model revision (the Transformers checkpoint revision used for model mode).
+# Gradient mode never uses this, but it is still part of the key so a gradient
+# output can NEVER satisfy a model request.
+MODEL_REVISION = "main@2026-11-17"
+
+
+def depth_cache_key(image_sha, depth_mode, model_name=MODEL_ID,
+                    model_revision=MODEL_REVISION, script_version=SCRIPT_VERSION):
+    """Composite cache key: image bytes + mode + model identity + script version.
+    Gradient and model keys always differ because depth_mode is included."""
+    payload = json.dumps([image_sha, depth_mode, model_name, model_revision, script_version],
+                         sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def license_check():
@@ -311,6 +327,7 @@ def main():
     p.add_argument("--story", default="src/stories/khmer-empire.json")
     p.add_argument("--depth", choices=["model", "gradient"], default="model")
     p.add_argument("--allow-missing", action="store_true")
+    p.add_argument("--force", action="store_true", help="recompute depth even when the cache key matches")
     p.add_argument("--layers", action="store_true", help="also write fg/mid/bg masks (OpenCV)")
     p.add_argument("--install-deps", action="store_true", help="python -m pip install dependencies")
     p.add_argument("--license-check", action="store_true", help="print verified model license and exit")
@@ -351,20 +368,39 @@ def main():
             continue
         out = depth_path_for(image)
         digest = sha256_file(image)
-        # Cache by image hash: skip regeneration when depth exists + sidecar hash matches.
+        key = depth_cache_key(digest, args.depth)
         sidecar = out + ".sha256"
-        if os.path.exists(out) and os.path.exists(sidecar) and open(sidecar, "r", encoding="utf-8").read().strip() == digest:
-            print("[cache] %s: depth unchanged (%s)" % (scene.get("id"), digest[:12]))
+        cached_source = None
+        hit = False
+        if os.path.exists(out) and os.path.exists(sidecar) and not args.force:
+            raw = open(sidecar, "r", encoding="utf-8").read().strip()
+            if raw.startswith("{"):
+                try:
+                    meta = json.loads(raw)
+                    if meta.get("cacheKey") == key:
+                        hit = True
+                        cached_source = meta.get("depthSource")
+                except (ValueError, TypeError):
+                    hit = False
+        if hit:
+            print("[cache hit: %s] %s: key=%s" % (cached_source, scene.get("id"), key[:12]))
             cached += 1
         else:
             if args.depth == "gradient":
                 w, h = gradient_depth(image, out)
-                print("[gradient] %s: wrote %s (%dx%d, 16-bit) -- FALLBACK" % (scene.get("id"), out, w, h))
+                print("[gradient] %s computed (%dx%d, 16-bit) -- FALLBACK" % (scene.get("id"), w, h))
+                cached_source = "gradient"
             else:
                 w, h = model_depth(image, out)
-                print("[model] %s: wrote %s (%dx%d, 16-bit)" % (scene.get("id"), out, w, h))
+                print("[model] %s computed (%dx%d, 16-bit)" % (scene.get("id"), w, h))
+                cached_source = "model"
+            # JSON sidecar carries the composite key + source so a gradient map
+            # can never satisfy a model request (different keys).
+            meta = {"cacheKey": key, "depthSource": cached_source, "imageSha256": digest,
+                    "depthMode": args.depth, "modelName": MODEL_ID,
+                    "modelRevision": MODEL_REVISION, "scriptVersion": SCRIPT_VERSION}
             with open(sidecar, "w", encoding="utf-8") as f:
-                f.write(digest)
+                json.dump(meta, f, indent=2)
             made += 1
         if args.layers:
             layer_split(image, os.path.splitext(image)[0])
@@ -394,6 +430,14 @@ def main():
             "note": "edgeMetric=frac(|Sobel|>0.08, depth normalized 0..1); depthRange=p95-p5; flatDepth=range<0.15; limit=clamp(1-edge/0.35,0.25,1)",
         })
 
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2)
+    print("[done] depth written: %d, cached: %d, missing images skipped: %d" % (made, cached, missing))
+    print("[done] parallax metrics: %s" % metrics_path)
+    if missing and not args.allow_missing:
+        print("[error] missing source images; re-run with --allow-missing to skip them.")
+        sys.exit(6)
+
 
 def _depth_source_from_sidecar(depth_path, fallback):
     """Read depthSource from a JSON cache sidecar; legacy plain-hash sidecars
@@ -410,14 +454,6 @@ def _depth_source_from_sidecar(depth_path, fallback):
             return fallback
     # Legacy sidecar: source genuinely unknown. Say so rather than guess.
     return "unknown-legacy-cache"
-
-    with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=2)
-    print("[done] depth written: %d, cached: %d, missing images skipped: %d" % (made, cached, missing))
-    print("[done] parallax metrics: %s" % metrics_path)
-    if missing and not args.allow_missing:
-        print("[error] missing source images; re-run with --allow-missing to skip them.")
-        sys.exit(6)
 
 
 if __name__ == "__main__":

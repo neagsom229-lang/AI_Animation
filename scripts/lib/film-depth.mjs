@@ -127,6 +127,7 @@ export function runDepth({ cfg, args, graph, root = process.cwd() }) {
 function spawnDepth(cmd, prefix, root, cfg, graph, mode, args) {
   const dArgs = [...prefix, 'scripts/depth.py', '--story', cfg.story, '--depth', mode];
   if (args.allowMissing) dArgs.push('--allow-missing');
+  if (args.force) dArgs.push('--force');
   graph.log(`depth: $ ${cmd} ${dArgs.join(' ')}`);
   const r = spawnSync(cmd, dArgs, { cwd: root, encoding: 'utf8', shell: process.platform === 'win32', stdio: 'inherit' });
   if (r.status !== 0) throw new Error(`depth.py failed (exit ${r.status}). FIX: check the log in build/logs/.`);
