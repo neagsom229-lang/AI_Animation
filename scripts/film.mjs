@@ -26,7 +26,7 @@ import { buildIllustratedTimeline } from '../remotion/lib/illustrated-timing.ts'
 import { costGuard } from './lib/film-cost.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const COMMANDS = ['status', 'doctor', 'ingest', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
+const COMMANDS = ['status', 'doctor', 'estimate', 'ingest', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
 
 /** Parse CLI args. Throws on unknown command/flag with exact usage. */
 export function parseArgs(argv) {
@@ -157,6 +157,11 @@ export async function main(argv = process.argv.slice(2)) {
       case 'doctor': {
         const { main: doctorMain } = await import('./film-doctor.mjs');
         code = await doctorMain([...(args.story ? ['--story', args.story] : []), ...(args.allowMissing ? ['--allow-missing'] : [])]);
+        break;
+      }
+      case 'estimate': {
+        const { main: estimateMain } = await import('./film-estimate.mjs');
+        code = estimateMain([...(args.story ? ['--story', args.story] : [])]);
         break;
       }
       case 'ingest':
