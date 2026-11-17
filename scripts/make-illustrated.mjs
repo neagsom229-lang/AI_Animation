@@ -133,8 +133,29 @@ export async function main(argv = process.argv.slice(2)) {
       throw new Error(`Intake manifest incomplete for ${bad.length} scene(s); final render refuses:\n  ${detail}`);
     }
     console.log('[Assert] Intake manifest complete and all scenes reviewed:true.');
+
+    // Round 9 item 1: SOURCE resolution gate (measured on source, not output).
+    const { sourceResolutionGate } = await import('./lib/image-check.mjs');
+    const minSrc = 1600;
+    const low = (im.scenes || []).filter((e) =>
+      e.sourceWidth !== undefined && sourceResolutionGate(e.sourceWidth, minSrc, { draft: args.draft }).hardFail);
+    if (low.length) {
+      const detail = low.slice(0, 6).map((e) => `scene ${e.scene}: source ${e.sourceWidth}px < ${minSrc}px`).join('\n  ');
+      throw new Error(`FINAL RENDER BLOCKED: ${low.length} scene(s) have source width < ${minSrc}px:\n  ${detail}\nFIX: regenerate larger illustrations or run: node scripts/film.mjs upscale --scene N (Real-ESRGAN, BSD-3). Drafts allow it with --draft.`);
+    }
+    console.log(`[Assert] Source-resolution gate OK (>= ${minSrc}px or draft).`);
+
+    // Round 9 item 2: exact + near-duplicate images are blocking.
+    const { buildImageRecords, groupDuplicates, requeueBlock } = await import('./lib/film-duplicates.mjs');
+    const promptText = fs.existsSync('docs/ILLUSTRATION_PROMPTS.md') ? fs.readFileSync('docs/ILLUSTRATION_PROMPTS.md', 'utf8') : '';
+    const records = buildImageRecords({ story, promptsDoc: promptText });
+    const dupGroups = groupDuplicates(records);
+    if (dupGroups.length) {
+      throw new Error(`FINAL RENDER BLOCKED: ${dupGroups.length} duplicate group(s):\n  ${dupGroups.map(requeueBlock).join('\n\n')}`);
+    }
+    console.log('[Assert] Duplicate check OK (no exact/near-duplicate scenes).');
   } else {
-    console.log('[warn] --allow-missing: intake manifest review gate skipped (fixture/dry run).');
+    console.log('[warn] --allow-missing: intake manifest review + source/duplicate gates skipped (fixture/dry run).');
   }
   stageAssets(story, report);
 

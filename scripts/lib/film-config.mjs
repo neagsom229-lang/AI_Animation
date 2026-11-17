@@ -36,6 +36,7 @@ export function validateConfig(cfg) {
   if (!(q.aspectTolerance > 0 && q.aspectTolerance < 0.2)) errors.push('quality.aspectTolerance must be 0..0.2');
   if (!Number.isInteger(q.minWidth) || q.minWidth <= 0 || !Number.isInteger(q.minHeight) || q.minHeight <= 0) errors.push('quality minWidth/minHeight required');
   if (typeof q.noAlpha !== 'boolean') errors.push('quality.noAlpha must be boolean');
+  if (!Number.isInteger(q.minSourceWidth) || q.minSourceWidth <= 0) errors.push('quality.minSourceWidth must be a positive integer');
   const c = cfg.cost || {};
   if (!(c.world3dMaxFraction > 0 && c.world3dMaxFraction <= 1)) errors.push('cost.world3dMaxFraction must be 0..1');
   for (const k of ['illustration', 'world3d', 'clip']) {

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { mapFilenames, missingScenes } from './film-map.mjs';
 import { hashInputs } from './film-graph.mjs';
+import { isUpscaled, sourceResolutionGate } from './image-check.mjs';
 
 /** Probe an image with Remotion ffprobe (returns width/height/pix_fmt). */
 export function probeImage(file) {
@@ -69,7 +70,10 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
   if (missing.length) graph.log(`  MISSING scenes: ${missing.join(', ')}`);
 
   // Keep originals + stage renamed copies for the existing intake wrapper.
+  // IMPORTANT: probe the SOURCE (inbox) file, never the resized output.
   const warningsByScene = {};
+  const sourceByScene = {};
+  const resolutionByScene = {};
   for (const m of result.mapped) {
     if (only && only !== m.scene) continue;
     const src = path.join(inbox, m.file);
@@ -78,9 +82,16 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
     const q = probeImage(src);
     const warns = qualityWarnings(q, cfg);
     if (warns.length) warningsByScene[m.scene] = warns;
+    sourceByScene[m.scene] = { sourceWidth: q.width, sourceHeight: q.height, upscaled: isUpscaled(q.width, cfg.resolutions.master[0]) };
+    const gate = sourceResolutionGate(q.width, cfg.quality.minSourceWidth, { draft: args.draft });
+    resolutionByScene[m.scene] = gate;
+    if (gate.warning) {
+      warningsByScene[m.scene] = [...(warningsByScene[m.scene] || []), gate.warning];
+      graph.log(`  scene ${m.scene}: SOURCE GATE ${gate.hardFail ? 'BLOCK' : 'WARN'}: ${gate.warning}`);
+    }
     const staged = path.join(staging, `scene-${String(m.scene).padStart(2, '0')}.png`);
     fs.copyFileSync(src, staged);
-    graph.log(`  scene ${m.scene}: ${m.file} ${q.width}x${q.height} ${q.pixFmt}${warns.length ? ` [${warns.join('; ')}]` : ''}`);
+    graph.log(`  scene ${m.scene}: SOURCE ${q.width}x${q.height} ${q.pixFmt}${warns.length ? ` [${warns.join('; ')}]` : ''}`);
   }
 
   // Wrap the existing normalizer. Force allows provisional license for dry runs.
@@ -101,7 +112,16 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
   if (fs.existsSync(manifestPath)) {
     const man = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     for (const e of man.scenes || []) {
+      const src = sourceByScene[e.scene] || {};
+      const prevUpscaled = e.upscaled === true; // preserve a previous film upscale
+      // SOURCE resolution (measured on the inbox file), never the resized output.
+      if (Number.isFinite(src.sourceWidth)) {
+        e.sourceWidth = src.sourceWidth;
+        e.sourceHeight = src.sourceHeight;
+      }
+      e.upscaled = prevUpscaled || src.upscaled === true;
       e.watermarkCheck = false; // required checklist item: check tool terms
+      e.matchesNarration = false; // required checklist item: content check (item 3)
       e.qualityWarnings = warningsByScene[e.scene] || [];
       e.reviewed = false;
     }

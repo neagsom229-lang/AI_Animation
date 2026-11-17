@@ -64,6 +64,7 @@ is a decision for the rights-holder, not something this document asserts.
 | edge-tts | 7.3.1 | installed `.../edge_tts-7.3.1.dist-info/licenses/LICENSE` | "The MIT license is used for 'src/edge_tts/srt_composer.py' only. All remaining files are licensed under the LGPLv3." — **LGPLv3 is a weak copyleft, NOT in the MIT/Apache/BSD/CC0/CC-BY allow-list.** Used only as a build-time TTS command-line tool; flag for review before redistribution. |
 | Depth Anything V2 Small | model | Hugging Face model card (fetched 2026-11-17) | "License: apache-2.0" — Apache-2.0, allowed. |
 | torch / transformers / Pillow / numpy / opencv-python-headless | via `python -m pip` | installed dist-info licenses | torch BSD-3-Clause, transformers Apache-2.0, Pillow HPND, numpy BSD-3-Clause, opencv Apache-2.0 — verify on install; all permissive. |
+| Real-ESRGAN (realesrgan-ncnn-vulkan) | optional upscaler | official LICENSE fetched 2026-11-17 from `https://raw.githubusercontent.com/xinntao/Real-ESRGAN/master/LICENSE` | "BSD 3-Clause License / Copyright (c) 2021, Xintao Wang / All rights reserved." — permissive, allowed. Used only by explicit `film upscale --scene N`; never silently. |
 
 ## Assets
 

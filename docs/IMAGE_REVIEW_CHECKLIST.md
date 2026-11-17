@@ -32,6 +32,13 @@ For each scene (01–18), check:
 ## Scene 18 exception
 - [ ] Scene 18 is "modern-day": contemporary dress IS allowed, but still no vehicles, signage, electronics, or modern objects (per its prompt).
 
+## Content check (Round 9)
+- [ ] **matches narration**: read the scene's Khmer/English narration line; confirm the image actually depicts that event (e.g. scene 11 = Cham war boats + burning city, not a market). Set `matchesNarration: true` in the manifest ONLY when it matches.
+
 ## Sign-off
 - [ ] Reviewed by: ____________  date: __________  scene id: __________
 - [ ] `reviewed: true` set in `assets-src/illustrations/manifest.json` for this scene.
+- [ ] `watermarkCheck: true` set after checking the generator tool's terms (never edit an image to hide a mark).
+- [ ] `matchesNarration: true` set after the content check above.
+
+Final render requires all three flags plus the string fields (tool/date/prompt/licenseTermsUrl) and a source width >= 1600 px. Duplicates (exact or near) block the final render regardless of flags.

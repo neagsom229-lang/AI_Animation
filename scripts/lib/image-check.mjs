@@ -72,11 +72,15 @@ export function validateImage({ width, height, pixFmt, format }) {
 
 /** Fields that the manifest requires to be non-empty before final render. */
 export const REQUIRED_MANIFEST_FIELDS = ['tool', 'date', 'prompt', 'licenseTermsUrl'];
+/** Boolean checklist flags required true (in addition to the string fields). */
+export const REQUIRED_MANIFEST_FLAGS = ['reviewed', 'watermarkCheck', 'matchesNarration'];
 
 /** True when a manifest entry is complete and reviewed. */
 export function isManifestEntryReady(entry) {
   if (!entry || entry.reviewed !== true) return false;
-  return REQUIRED_MANIFEST_FIELDS.every((k) => typeof entry[k] === 'string' && entry[k].trim().length > 0);
+  const stringsOk = REQUIRED_MANIFEST_FIELDS.every((k) => typeof entry[k] === 'string' && entry[k].trim().length > 0);
+  const flagsOk = REQUIRED_MANIFEST_FLAGS.every((k) => entry[k] === true);
+  return stringsOk && flagsOk;
 }
 
 /** Detect whether Real-ESRGAN is installed (optional upscale hook). */
@@ -84,3 +88,32 @@ export function realEsrganAvailable(executable = 'realesrgan-ncnn-vulkan') {
   // Kept as a pure predicate on a detected path; intake passes the resolved path.
   return typeof executable === 'string' && executable.trim().length > 0;
 }
+
+// --- Round 9 item 1: SOURCE resolution gate -------------------------------
+
+/** Was a source upscaled to the target width? Pure. */
+export function isUpscaled(sourceWidth, targetWidth = TARGET_W) {
+  return Number.isFinite(sourceWidth) && sourceWidth < targetWidth;
+}
+
+/**
+ * Evaluate the source-resolution gate. Final render fails when sourceWidth <
+ * minSourceWidth; drafts allow it with a warning. Pure.
+ * Returns { ok, hardFail, warning }.
+ */
+export function sourceResolutionGate(sourceWidth, minSourceWidth, { draft = false } = {}) {
+  if (!Number.isFinite(sourceWidth)) {
+    return { ok: false, hardFail: true, warning: 'unknown source width (could not measure SOURCE resolution)' };
+  }
+  if (sourceWidth < minSourceWidth) {
+    return {
+      ok: Boolean(draft),
+      hardFail: !draft,
+      warning: `source width ${sourceWidth}px < ${minSourceWidth}px minimum` + (draft ? ' (draft: allowed with warning)' : ' (FINAL RENDER BLOCKED — supply a larger source or run film upscale)'),
+    };
+  }
+  return { ok: true, hardFail: false, warning: null };
+}
+
+/** Manifest fields required for the source-resolution gate. */
+export const SOURCE_RESOLUTION_FIELDS = ['sourceWidth', 'sourceHeight', 'upscaled'];

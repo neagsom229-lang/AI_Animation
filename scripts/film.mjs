@@ -26,11 +26,11 @@ import { buildIllustratedTimeline } from '../remotion/lib/illustrated-timing.ts'
 import { costGuard } from './lib/film-cost.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const COMMANDS = ['status', 'ingest', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
+const COMMANDS = ['status', 'ingest', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
 
 /** Parse CLI args. Throws on unknown command/flag with exact usage. */
 export function parseArgs(argv) {
-  const a = { command: null, story: null, only: null, force: false, draft: false, strict: false, verbose: false, allowMissing: false };
+  const a = { command: null, story: null, only: null, force: false, draft: false, strict: false, verbose: false, allowMissing: false, depthMode: null };
   const rest = [...argv];
   if (rest.length && !rest[0].startsWith('-')) a.command = rest.shift();
   for (let i = 0; i < rest.length; i += 1) {
@@ -47,6 +47,10 @@ export function parseArgs(argv) {
     else if (x === '--strict') a.strict = true;
     else if (x === '--verbose') a.verbose = true;
     else if (x === '--allow-missing') a.allowMissing = true;
+    else if (x === '--depth' && rest[i + 1]) {
+      a.depthMode = rest[++i];
+      if (!['model', 'gradient'].includes(a.depthMode)) throw new Error('--depth must be model or gradient');
+    }
     else if (x === '--help' || x === '-h') a.help = true;
     else throw new Error(`Unknown argument: ${x}. Usage: node scripts/film.mjs <${COMMANDS.join('|')}> [--story ...] [--only scene=N] [--force] [--draft] [--strict] [--verbose]`);
   }
@@ -86,21 +90,22 @@ export function loadStoryData(cfg, voiceOverride) {
 /** Print the status dashboard; return exit code. */
 export async function cmdStatus({ cfg, args, graph }) {
   const { story, voiceData, timeline } = loadStoryData(cfg);
-  const report = computeStatus({
+  const report = await computeStatus({
     root: ROOT, cfg, story, voiceData, timeline,
     configHashValue: configHash(cfg),
   });
   console.log('');
-  console.log('scene        image  depth  reviewed  voice  dur(s)  media         cache     warnings');
-  console.log('-'.repeat(96));
+  console.log('scene        image  depth  rev  match  srcW   upsc  voice  dur(s)  media         warnings');
+  console.log('-'.repeat(104));
   for (const r of report.scenes) {
     console.log(
       `${String(r.scene).padEnd(12)} ${String(r.image).padEnd(6)} ${String(r.depth).padEnd(6)} ` +
-      `${String(r.reviewed).padEnd(9)} ${String(r.voice).padEnd(6)} ${String(r.duration ?? '-').padEnd(7)} ` +
-      `${String(r.mediaType).padEnd(13)} ${String(r.cache).padEnd(9)} ${r.warnings.join('; ')}`
+      `${String(r.reviewed).padEnd(4)} ${String(r.matchesNarration).padEnd(6)} ${String(r.sourceWidth ?? '-').padEnd(6)} ` +
+      `${String(r.upscaled).padEnd(5)} ${String(r.voice).padEnd(6)} ${String(r.duration ?? '-').padEnd(7)} ` +
+      `${String(r.mediaType).padEnd(13)} ${r.warnings.join('; ')}`
     );
   }
-  console.log('-'.repeat(96));
+  console.log('-'.repeat(104));
   console.log(`\nVERDICT: ${report.verdict}`);
   if (report.reasons.length) {
     console.log('REASONS:');
@@ -109,6 +114,12 @@ export async function cmdStatus({ cfg, args, graph }) {
   if (report.wrongFolder.length) {
     console.log('\nWRONG-FOLDER IMAGES (outputs mistaken for inputs). Fix commands:');
     for (const f of report.wrongFolderFixes) console.log(`  ${f}`);
+  }
+  if (report.duplicateGroups && report.duplicateGroups.length) {
+    console.log(`\nDUPLICATE GROUPS (BLOCKING for final render): ${report.duplicateGroups.length}`);
+    for (const g of report.duplicateGroups) console.log(`  ${g.map((r) => `scene ${r.scene}`).join(' == ')}`);
+    console.log('\nREQUEUE (paste into the image generator):');
+    for (const b of report.requeue) console.log(b + '\n');
   }
   if (report.sheetStale === true) console.log('\nNOTE: preview sheet is STALE — run: node scripts/film.mjs preview');
   // Cost guard.
@@ -147,10 +158,17 @@ export async function main(argv = process.argv.slice(2)) {
         await ingest({ cfg, args, graph, data, force: args.force, only: args.only, verbose: args.verbose });
         code = 0;
         break;
-      case 'depth':
-        runCmd('python', ['scripts/depth.py', '--story', cfg.story, '--depth', cfg.depth.mode, ...(args.allowMissing ? ['--allow-missing'] : [])],
-          { verbose: args.verbose, label: 'depth', fix: `python -m pip install torch transformers Pillow numpy (or use --depth gradient in film.config.json)` });
+      case 'depth': {
+        const { runDepth } = await import('./lib/film-depth.mjs');
+        runDepth({ cfg, args, graph, root: ROOT });
+        code = 0;
         break;
+      }
+      case 'upscale': {
+        const { filmUpscale } = await import('./lib/film-upscale.mjs');
+        code = await filmUpscale({ cfg, args, graph, data, root: ROOT });
+        break;
+      }
       case 'voice':
         runCmd('python', ['scripts/generate-voice.py', '--story', cfg.story, '--lang', 'km',
           '--voice', cfg.tts.voice, '--tts', cfg.tts.provider, '--rate', String(cfg.tts.rate),

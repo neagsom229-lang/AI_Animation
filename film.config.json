@@ -26,7 +26,8 @@
     "aspectTolerance": 0.02,
     "minWidth": 1920,
     "minHeight": 1080,
-    "noAlpha": true
+    "noAlpha": true,
+    "minSourceWidth": 1600
   },
   "intake": {
     "tool": "user-provided illustration",
