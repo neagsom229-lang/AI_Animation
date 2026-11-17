@@ -52,6 +52,41 @@ Outputs land in `out/`:
 stamps a `MOCK VOICE` label on the film. Mock audio uses a `mock-` filename prefix
 and is never reused for real generation.
 
+### Render path, GPU and RAM (Round 4)
+
+`node scripts/make.mjs` renders with the **GPU path by default**:
+`gl: 'angle'` (hardware ANGLE) on a **full Chrome/Edge** install, which is
+auto-detected (`CHROME=<path>` overrides it). Remotion's bundled
+`chrome-headless-shell` only speaks SwiftShader, so it can never reach the
+GPU — "default = software" meant "default = no GPU".
+
+| flag | GL backend | use for |
+|---|---|---|
+| *(none)* | `angle` (GPU) | **production renders** |
+| `--software` | SwiftShader | the determinism reference |
+| `--gpu` | `angle` (GPU) | explicit alias of the default |
+
+`npm run verify:determinism` is pinned to `gl: 'swiftshader'` on purpose: the
+determinism reference must be the same on every machine.
+
+**RAM.** This machine has 16 GB total and ~4–5 GB free, and every Remotion
+tab holds a WebGL context plus the bundle. Four tabs is the proven-stable
+number (`concurrency: 4`, `timeoutInMilliseconds: 60000`).
+
+A pre-flight runs before every render (`scripts/preflight.mjs`):
+
+```powershell
+node scripts/preflight.mjs          # report only
+node scripts/preflight.mjs --kill   # report + reap stale Remotion browsers
+node scripts/preflight.mjs --json   # machine-readable
+```
+
+It prints free RAM, **warns below 4 GB**, picks the concurrency (4 at ≥4 GB,
+2 below it) and kills the headless Chrome processes that *this pipeline*
+started (their command line carries Remotion's user-data-dir marker) — a
+leaked browser holds hundreds of MB and starves the next render. The render
+scripts reap their own browsers again afterwards.
+
 ## Story JSON format
 
 Required: `title`, `genre`, `theme`, `characters[]` (≥1), `scenes[]` (≥1).
@@ -59,7 +94,21 @@ Each scene requires `id`, `name`, positive numeric `dur`, and `dialogue[]`; each
 line requires non-empty `text`. Optional per scene: `mood`, `camera`, `shot`,
 `renderer`, `actions`. Optional per story: `language` and `world` — `world`
 names a dressed 3D set (e.g. `"khmer-temple"`); unknown world names are hard
-errors, never a silent substitute set.
+errors, never a silent substitute set. Optional per story:
+`subtitleLanguage` — the language the CAPTIONS are in (defaults to the
+narration language).
+
+Camera rigs: `dolly`, `dolly-drift` (a slow push-in **plus** a drifting
+bearing and a vertical settle — the two-shot move), `orbit`, `crane`,
+`handheld`, `static`.
+Shot types: `close-up`, `medium`, `wide` (a monument shot aimed at the
+temple), `over-shoulder`.
+
+**Caption language.** The caption text follows the *script* of the caption
+language: with `--lang km` the shipped Khmer story shows the Khmer narration
+line, and the English `subtitle` field (an authored gloss) is used only when
+the caption language is English. Set `"subtitleLanguage": "en"` in the story
+to force English captions under Khmer narration.
 
 ```json
 {

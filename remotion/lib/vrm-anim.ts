@@ -298,6 +298,127 @@ function vowelAt(seed: string, lineStartFrame: number, index: number): MouthShap
 }
 
 // ---------------------------------------------------------------------------
+// Weight shift + torso counter-rotation
+// ---------------------------------------------------------------------------
+
+/** Slowest weight-shift cycle (seconds per foot). */
+export const WEIGHT_SHIFT_MIN_PERIOD_SEC = 2.3;
+/** Fastest weight-shift cycle (seconds per foot). */
+export const WEIGHT_SHIFT_MAX_PERIOD_SEC = 3.5;
+
+/**
+ * Weight-shift phase in [-1, 1]: +1 = the body's weight is on the RIGHT
+ * foot, -1 = on the LEFT, 0 = mid-stride.
+ *
+ * A standing human is never symmetrical: the weight settles onto one hip,
+ * the pelvis rolls onto that side, the free leg softens, and the torso
+ * counter-rotates above it. Without this layer the figure reads as a
+ * mannequin that breathes — which is exactly what the Round-4 motion
+ * measurement showed (torso diff 3.4/255 against the head's 11.6/255).
+ *
+ * A raised cosine is used so the settle at each extreme has zero velocity:
+ * a sine would snap its weight between feet.
+ */
+export function weightShift(frame: number, fps: number, seed: string): number {
+  if (!Number.isFinite(frame) || !Number.isFinite(fps) || fps <= 0) return 0;
+  const t = frame / fps;
+  const period =
+    WEIGHT_SHIFT_MIN_PERIOD_SEC +
+    seeded(`weight:${seed}`, 'p') * (WEIGHT_SHIFT_MAX_PERIOD_SEC - WEIGHT_SHIFT_MIN_PERIOD_SEC);
+  const phase = seeded(`weight:${seed}`, 'o');
+  return Math.cos(2 * Math.PI * (t / period + phase));
+}
+
+// ---------------------------------------------------------------------------
+// Speech peaks (envelope-driven gesture timing)
+// ---------------------------------------------------------------------------
+
+/** Envelope level above which a sample counts as a speech peak. */
+export const SPEECH_PEAK_THRESHOLD = 0.5;
+
+/**
+ * Local maxima of the 20 Hz voice envelope, in seconds relative to the
+ * line's audio start.
+ *
+ * The envelope is the honest source of *when* a person gesticulates: real
+ * emphasis lands on the stressed syllable, not on a metronome. A seeded
+ * schedule (the old `gestureEnvelope`) fires at random-ish times that do
+ * not match the voice, which is why the hands looked disconnected from the
+ * dialogue.
+ *
+ * @returns sorted peak times in seconds (empty when there is no envelope)
+ */
+export function speechPeaks(
+  env: number[] | undefined,
+  lineStartFrame: number,
+  fps: number,
+  threshold: number = SPEECH_PEAK_THRESHOLD
+): number[] {
+  if (!Array.isArray(env) || env.length === 0 || fps <= 0) return [];
+  const out: number[] = [];
+  for (let i = 1; i < env.length - 1; i += 1) {
+    const v = env[i];
+    if (v < threshold) continue;
+    if (v >= env[i - 1] && v > env[i + 1]) {
+      out.push(i / 20);
+    }
+  }
+  // Two peaks closer than 90 ms are one stressed syllable, not two.
+  const merged: number[] = [];
+  for (const p of out) {
+    if (merged.length === 0 || p - merged[merged.length - 1] > 0.09) merged.push(p);
+  }
+  void lineStartFrame;
+  return merged;
+}
+
+export interface PeakGesture {
+  /** Gesture strength in [0, 1]. */
+  amount: number;
+  /** Which hand gestures. */
+  side: 'left' | 'right';
+}
+
+/**
+ * Gesture envelope driven by the speech peaks: each stressed syllable lifts
+ * one hand for ~0.6 s. Pure function of (frame, fps, env, lineStartFrame,
+ * seed).
+ */
+export function speechPeakGesture(
+  frame: number,
+  fps: number,
+  env: number[] | undefined,
+  lineStartFrame: number,
+  seed: string
+): PeakGesture {
+  const idle: PeakGesture = { amount: 0, side: 'right' };
+  if (!Number.isFinite(frame) || !Number.isFinite(fps) || fps <= 0) return idle;
+  const peaks = speechPeaks(env, lineStartFrame, fps);
+  if (peaks.length === 0) return idle;
+
+  const t = (frame - lineStartFrame) / fps;
+  let best = 0;
+  let bestIndex = -1;
+  peaks.forEach((p, i) => {
+    const dt = t - p;
+    if (dt < -0.07 || dt > 0.62) return;
+    // Anticipate slightly (the hand starts just before the stress), then
+    // settle after it.
+    const rise = dt < 0 ? smoothstep(-0.07, 0, dt) : 1;
+    const fall = 1 - smoothstep(0.18, 0.62, dt);
+    const v = rise * fall;
+    if (v > best) {
+      best = v;
+      bestIndex = i;
+    }
+  });
+  if (bestIndex < 0) return idle;
+  const side: 'left' | 'right' =
+    seeded(`peak:${seed}`, `s${bestIndex}`) < 0.5 ? 'left' : 'right';
+  return { amount: best, side };
+}
+
+// ---------------------------------------------------------------------------
 // Body pose — Idle / Talk / Gesture / Walk, cross-faded, never T-pose
 // ---------------------------------------------------------------------------
 
@@ -421,6 +542,7 @@ export function bodyPose(input: BodyPoseInput): BodyPose {
   const envAmp = envelopeAmplitude(env, frame, fps, lineStartFrame);
   const breath = breathWave(frame, fps, seed);
   const sway = headSway(frame, fps, seed);
+  const shift = weightShift(frame, fps, seed);
 
   // 1) Always-on micro-motion.
   const pose: BodyPose = {
@@ -490,7 +612,34 @@ export function bodyPose(input: BodyPoseInput): BodyPose {
       add(shoulder, { z: -0.05 * sign * envG });
       add('chest', { y: 0.05 * sign * envG });
     }
+
+    // 3b) Speech-peak gesture: the hand lifts on the stressed syllable, so
+    // the gesture lands WITH the voice instead of on a random schedule.
+    const peak = speechPeakGesture(frame, fps, env, lineStartFrame, seed);
+    if (peak.amount > 0) {
+      const sign = peak.side === 'right' ? 1 : -1;
+      const lower: VrmBoneName = peak.side === 'right' ? 'rightLowerArm' : 'leftLowerArm';
+      const wrist: VrmBoneName = peak.side === 'right' ? 'rightHand' : 'leftHand';
+      const shoulder: VrmBoneName = peak.side === 'right' ? 'rightShoulder' : 'leftShoulder';
+      const amt = peak.amount * fade;
+      add(lower, { y: -0.34 * sign * amt, z: 0.26 * amt, x: -0.16 * amt });
+      add(wrist, { y: 0.42 * sign * amt, x: 0.16 * amt });
+      add(shoulder, { z: -0.07 * sign * amt });
+      add('chest', { y: 0.06 * sign * amt });
+      add('head', { y: 0.04 * sign * amt });
+    }
   }
+
+  // 4) Weight shift + torso counter-rotation (always on). The pelvis rolls
+  //    onto the supporting foot, the spine and chest counter-rotate above
+  //    it, and the free knee softens. This is the layer that stops the
+  //    figure reading as a mannequin between gestures.
+  add('hips', { z: 0.055 * shift, y: 0.02 * shift });
+  add('spine', { y: 0.035 * shift, z: -0.022 * shift });
+  add('chest', { y: -0.055 * shift, z: 0.018 * shift });
+  add('head', { y: -0.018 * shift });
+  add('leftLowerLeg', { x: 0.05 * Math.max(0, shift) });
+  add('rightLowerLeg', { x: 0.05 * Math.max(0, -shift) });
 
   return pose;
 }

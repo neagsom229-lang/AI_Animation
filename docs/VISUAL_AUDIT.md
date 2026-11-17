@@ -59,3 +59,93 @@ Figure heights are geometry-derived (fov 45°); visual spot-checks of crops agre
 | Near-identical wide frames | `getShotPose('wide','dolly')` only scales distance (11 m × 1.18 → 1.0); no arc, no crane, no animated set motion |
 | Figures at 16% frame height | wide distance 11 m and 45° fov — by design was "establishing", but it is never escaped |
 | No face → no eye-line | same blocking |
+
+
+---
+
+# Visual Audit — Round 4 (2026-11-17)
+
+Method: `node scripts/motion-proof.mjs` renders 8 consecutive frames
+(every 3rd frame) of a scene, projects the speaker's head / torso / arm
+regions into screen space using the composition's own camera maths
+(`remotion/lib/camera.ts` + forward kinematics on the shipped VRM), and
+prints the pixel difference per region. The shot and the rig can be
+overridden on the *input story* without touching a source file, so the same
+character rig, the same line and the same audio can be measured at two
+framings.
+
+Two numbers per region:
+
+- **mean diff** — mean absolute per-channel difference, minus the measured
+  background drift (camera motion). Scale-DEPENDENT: a 10 px-tall region
+  turns a one-pixel shift into a 30/255 mean.
+- **visible-change fraction** — the share of the region's pixels whose
+  max-channel delta exceeds 8/255. Much closer to scale-independent, and
+  the number to quote.
+
+## The round-4 findings (before -> after)
+
+Close-up, scene `k2`, speaker `reach` (Vivi.vrm), 8 frames from f301 to
+f322, background subtracted:
+
+| region | mean diff before | mean diff after | changed % before | changed % after |
+|---|---|---|---|---|
+| head | 11.605 | **17.280** | 26.1 % | **37.0 %** |
+| torso | 3.437 | **7.221** | 13.0 % | **24.1 %** |
+| arm | 2.587 | **5.148** | 11.2 % | **18.4 %** |
+
+Wide, same scene, same frames (framing changed — see below):
+
+| region | changed % before | changed % after |
+|---|---|---|
+| head | 55.1 % | 86.2 % |
+| torso | 45.0 % | 81.5 % |
+| arm | 38.7 % | 70.6 % |
+
+**Stated plainly:** before Round 4 the character *did* move, but almost all
+of it was in the head (the lip-sync and the gaze). The torso and the arms
+were close to static — that is what "procedural/stiff" meant, and it is
+confirmed by the numbers, not by impression. After Round 4 the torso and the
+arms are roughly twice as alive and the gesture is timed by the voice.
+
+The wide-shot numbers are **not** comparable with the close-up numbers: the
+figure occupies 8x10 px in the new wide framing (a monument shot 62 m from
+the temple) against 16x23 px in the old one, so the mean-diff metric
+inflates. The visible-change fraction is the comparable figure, and it says
+the same thing: the character is changing in every framing, it is simply
+too small to read as motion in the wide.
+
+## What the frames showed
+
+1. **The characters are anime placeholders.** Confirmed by eye and by
+   measurement: VRoid-style models with large eyes and stylised hair. No
+   procedural work fixes that — it needs the MPFB/Mixamo assets
+   (`docs/CHARACTER_PIPELINE.md`).
+2. **The temple read as a brown pyramid.** The central prang was only 1.875x
+   the corner prangs and the galleries were solid boxes with the colonnade
+   hidden inside them. Now: 3.000x exactly, colonnades in front of a
+   shadowed gallery, cornice bands on the prang shaft, and the whole set
+   sized from a 1.70 m human (4.2 m gallery, 37.5 m apex).
+3. **The ground was brick-red.** Now dry earth + instanced grass tufts.
+4. **The moat was invisible** — it was buried under a ground plane that
+   covered it. The ground is now four pieces with the moat cut out of it.
+5. **The cone trees** are now sugar palms with a dense forest line behind
+   the monument.
+6. **The doorway** was a flat grey rectangle; it is now a real recess with
+   jambs, a lintel slab, flanking columns and a dark interior.
+7. **The naga balustrade** was a row of spikes; it is now a continuous
+   serpent rail on a stone plinth, terminated by 5 hooded heads per side.
+8. **The captions were English under Khmer narration.** The shipped Khmer
+   story's `subtitle` field is an English gloss. The caption text is now
+   resolved by the SCRIPT of the caption language.
+
+## Measurement artefacts worth knowing
+
+- The first arm measurement (0.955 mean diff) was taken with an arm box
+  that landed on the background: a VRoid with the arms down hangs them
+  against the body, so an arm region must be cut from the *posed* stance
+  (forward kinematics on `IDLE_POSE`), not from the rest pose. The
+  `before` numbers above use the corrected boxes, so they are comparable
+  with the `after` numbers.
+- The wide shot's DoF mask used to blur the upper half of the frame — i.e.
+  the temple — into mush. The mask now keeps the subject sharp.

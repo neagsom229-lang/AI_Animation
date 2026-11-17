@@ -27,18 +27,46 @@ export function srtTimestamp(seconds) {
 }
 
 /**
+ * Resolve the caption text of one voice line.
+ *
+ * Mirrors remotion/lib/subtitles.ts `getSubtitleText`: the SPOKEN text wins
+ * when it is written in the caption language's script; otherwise the
+ * authored gloss wins. Without any language information the historical
+ * behaviour applies (gloss first, spoken text as the fallback).
+ *
+ * @param {{ subtitle?: string, text?: string }} line
+ * @param {string} caption caption language (may be empty)
+ */
+export function resolveCaptionText(line, caption) {
+  const spoken = typeof line.text === 'string' ? line.text : '';
+  const gloss = typeof line.subtitle === 'string' ? line.subtitle : '';
+  if (caption) {
+    const khmer = /[\u1780-\u17ff]/;
+    const latin = /[A-Za-z]/;
+    const matches = (text) =>
+      caption === 'km' ? khmer.test(text) : caption === 'en' ? latin.test(text) : false;
+    if (matches(gloss)) return gloss.trim();
+    if (matches(spoken)) return spoken.trim();
+  }
+  return gloss.trim() || spoken.trim();
+}
+
+/**
  * Build the full SRT document from voiceData.
  * Line start times are cumulative within scenes; an inter-scene gap of
  * `gapSec` (default 0.75 s, matching remotion/lib/story-timing.ts) is added
  * after each scene's audio except the last, so SRT timings match the film.
- * @param {{ scenes: Array<{ id: string, dur: number, lines: Array<{ subtitle?: string, text?: string, dur: number }> }> }} voiceData
+ * @param {{ language?: string, scenes: Array<{ id: string, dur: number, lines: Array<{ subtitle?: string, text?: string, dur: number }> }> }} voiceData
  * @param {number} [gapSec=0.75]
+ * @param {{ captionLanguage?: string }} [options]
  * @returns {string} complete SRT file content (ends with a newline)
  */
-export function buildSrt(voiceData, gapSec = 0.75) {
+export function buildSrt(voiceData, gapSec = 0.75, options = {}) {
   if (!voiceData || !Array.isArray(voiceData.scenes)) {
     throw new Error('buildSrt: voiceData must contain a scenes array');
   }
+  const narration = (voiceData.language || '').trim().toLowerCase();
+  const caption = (options.captionLanguage || narration || '').trim().toLowerCase();
   const blocks = [];
   let index = 1;
   let cursor = 0;
@@ -46,7 +74,7 @@ export function buildSrt(voiceData, gapSec = 0.75) {
     for (const line of scene.lines || []) {
       const start = cursor;
       const end = cursor + line.dur;
-      const text = (line.subtitle || line.text || '').trim();
+      const text = resolveCaptionText(line, caption);
       if (line.silent === true) {
         // Silent establishing filler: contributes time but no caption cue.
         cursor = end;

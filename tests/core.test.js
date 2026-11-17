@@ -38,7 +38,7 @@ test('validateStory rejects unknown camera with the valid list in the message', 
     scenes: [{ id: 's1', name: 'S', dur: 3, camera: 'spiral' }]
   };
   assert.throws(() => validateStory(story), (err) => {
-    return /unknown camera "spiral"/.test(err.message) && err.message.includes('dolly, orbit, crane, handheld, static');
+    return /unknown camera "spiral"/.test(err.message) && err.message.includes('dolly, dolly-drift, orbit, crane, handheld, static');
   });
 });
 

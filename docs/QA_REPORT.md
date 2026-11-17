@@ -167,3 +167,121 @@ byte-identical across runs (see gates), so determinism claims stand on software.
 3. **Optional**: push sandstone desaturation + real water reflection (drei
    `Reflector` or `MeshStandardMaterial` with metalness 1.0 roughness 0.05) +
    nāga head geometry — each is an independent Phase-2-sized change.
+
+
+---
+
+# Round 4 (2026-11-17) — measurement, motion, temple, shots, render
+
+## What was measured first (no code changes)
+
+`scripts/motion-proof.mjs` (new) renders 8 consecutive frames (every 3rd
+frame), projects the speaker's head / torso / arm regions into screen space
+with the composition's own camera maths and prints the pixel difference.
+The shot and rig can be overridden on the *input story* without touching a
+source file, so the same rig, line and audio were measured at two
+framings. Full numbers and the artefacts: `docs/VISUAL_AUDIT.md`.
+
+**Stated plainly:** the character DID move before Round 4, but almost all of
+it was in the head. The torso and the arms were close to static. That is
+the evidence behind "procedural/stiff".
+
+| region (close-up, k2) | mean diff before | after | changed % before | after |
+|---|---|---|---|---|
+| head | 11.605 | 17.280 | 26.1 % | 37.0 % |
+| torso | 3.437 | 7.221 | 13.0 % | 24.1 % |
+| arm | 2.587 | 5.148 | 11.2 % | 18.4 % |
+
+## Gates (Round 4)
+
+| gate | command | result |
+|---|---|---|
+| types | `tsc --noEmit` | clean |
+| tests | `npm test` | 180 / 180 pass |
+| determinism (reference composition) | `node scripts/verify-determinism.mjs` | PASS — byte-identical video + 7/7 identical frame hashes |
+| determinism (StoryFilm) | `node scripts/verify-determinism.mjs --composition StoryFilm` | PASS — byte-identical video + 3/3 identical frame hashes |
+| production render | `node scripts/render.mjs --story src/stories/khmer-temple.json --out out/khmer-temple-round4.mp4` | 407 frames rendered |
+
+## Changes by area
+
+### Temple (`remotion/lib/angkor.ts`, `remotion/compositions/AngkorWorld.tsx`)
+
+- **Scale from the human.** The set is now sized from a 1.70 m figure:
+  the outer gallery's colonnade is 4.2 m (≈2.5× a person) and the central
+  prang's apex is 37.5 m (≈22× a person). The central prang is exactly
+  **3.000×** the corner prangs (it was 1.875×) — that ratio is what turns
+  a stepped pyramid into Angkor Wat.
+- **The galleries are colonnades, not solid boxes.** Each tier is now an
+  open rhythm of columns in front of a shadowed (recessed) gallery wall,
+  capped by a corniced roof slab. Before, the colonnade was modelled but
+  hidden inside a solid box.
+- **The prangs are towers.** A stepped plinth, a tapering square shaft
+  broken by six projecting cornice bands, a lotus-bud crown and a finial.
+  The upper courses use a lighter stone so the silhouette separates.
+- **The gopura has a real doorway** — jambs, a projecting lintel slab,
+  flanking columns and a dark interior, instead of a flat grey rectangle.
+- **The wall has rhythm** — buttress pilasters and a coping course; the
+  carved bas-relief bump band (registers + corbelled niches) now repeats at
+  a readable scale.
+- **Ground, moat, trees.** Dry earth + 620 instanced grass tufts (the
+  brick-red ground is gone); the moat is cut OUT of the ground plane
+  (four pieces with a hole) and carries dark reflective water plus 54
+  lotus pads; the cone trees are now sugar palms (260 of them) with a
+  dense forest line of 240 behind the monument.
+- **The naga balustrade** is a continuous serpent rail on a straight stone
+  plinth, terminated by 5 hooded heads per side (was a row of spikes).
+
+### Characters (`remotion/lib/vrm-anim.ts`, `remotion/lib/character-anim.ts`, `remotion/lib/foot-plant.ts`, `remotion/compositions/GlbCharacter.tsx`)
+
+- **Weight shift + torso counter-rotation** (always on): the hips roll
+  onto the supporting foot, the spine and chest counter-rotate above it,
+  the free knee softens.
+- **Gestures timed by the VOICE**: the local maxima of the 20 Hz envelope
+  are the stressed syllables, and the hand lifts on each one. The old
+  seeded schedule fired at times unrelated to the dialogue.
+- **Face rig on the GLB path**: mouth morph targets are matched against a
+  shared viseme table; a rig with no visemes gets its **jaw** and/or
+  **lower lip** driven from the same envelope.
+- **Foot planting**: after the mixer seek, a foot below the floor is
+  clamped to it and the leg shortened (max 6 cm).
+- **Dispatch**: the GLB/Mixamo human is primary, the VRM is the fallback.
+
+### Shots and captions
+
+- New camera rig **`dolly-drift`** — a slow push-in PLUS a drifting
+  bearing and a vertical settle. The two-shot now uses it, so consecutive
+  frames differ.
+- The wide shot is now a **monument** shot aimed at the temple (the
+  look-at moved from the character to the temple spine).
+- **Caption language**: the shipped Khmer story's `subtitle` field is an
+  English gloss; the captions now follow the *script* of the caption
+  language, so `--lang km` shows Khmer and `--lang en` shows the gloss.
+  A story may override with `subtitleLanguage`.
+
+### Render
+
+- The **GPU path is the default** (`gl: 'angle'` on an auto-detected full
+  Chrome/Edge); `--software` selects the software path that
+  `verify:determinism` uses as the reference.
+- `scripts/preflight.mjs`: free-RAM report, **warning below 4 GB**,
+  concurrency selection, and reaping of the headless Chrome processes this
+  pipeline started (before and after the render).
+
+## Known remaining defects (Round 4)
+
+1. **The characters are still anime placeholders.** The VRMs are VRoid
+   models. No procedural work fixes that — it needs the MPFB/Mixamo assets
+   (`docs/CHARACTER_PIPELINE.md`).
+2. **The gopura masonry still reads as planks** at close range: one
+   texture repeat cannot serve both a 7 m jamb and a 9 m lintel, so two
+   repeats are used, but the material still stretches on the long bands.
+3. **The moat is thin in the wide shot.** Geometrically correct from a
+   4.4 m camera 62 m from the temple, but it reads as a dark line rather
+   than water. A higher or closer wide shot would show it.
+4. **The face rig on the shipped GLB pack is untested end-to-end** — the
+   Quaternius pack has no visemes and no jaw bone, so the jaw path is
+   exercised only by unit tests, not by a render.
+5. **Foot planting is a contact clamp, not an IK solve.**
+6. **The close-up framing is looser than a cinema close-up** (the shot
+   tests pin the 40–60 % band measured on a 1.8 m stand-in, and the
+   shipped VRM is ~1.6 m).

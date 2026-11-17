@@ -59,17 +59,71 @@ export function getSubtitleFont(language?: string): string {
 }
 
 /**
+ * Options for the subtitle text resolution.
+ */
+export interface SubtitleOptions {
+  /** The language the narration is spoken in (voiceData.language). */
+  narrationLanguage?: string;
+  /** The language the caption should be in. Defaults to the narration
+   *  language; a story may override it (e.g. `subtitleLanguage: "en"`). */
+  captionLanguage?: string;
+}
+
+/** Khmer Unicode block (used for the script check below). */
+const KHMER_RE = /[\u1780-\u17ff]/;
+/** Any Latin letter. */
+const LATIN_RE = /[A-Za-z]/;
+
+/**
+ * Does `text` contain characters of the script the caption language uses?
+ *
+ * The check is by SCRIPT, not by the declared language of the line, because
+ * a Khmer story carries an English gloss in `subtitle` and an English render
+ * of that same story still has to show the English gloss.
+ */
+export function textMatchesLanguage(text: string, language: string): boolean {
+  const lang = language.trim().toLowerCase();
+  if (lang === 'km') return KHMER_RE.test(text);
+  if (lang === 'en') return LATIN_RE.test(text);
+  return false;
+}
+
+/**
  * Resolve the subtitle text of a dialogue line.
- * Prefers a non-empty human subtitle, falls back to the spoken text.
+ *
+ * The story's `subtitle` field is a human-authored GLOSS — in the shipped
+ * Khmer story it is an English sentence while the narration is Khmer, so
+ * preferring it unconditionally put English captions under Khmer speech.
+ *
+ * The rule is now script-driven:
+ *
+ *  - the authored `subtitle` wins when it is written in the caption
+ *    language's script (it is the caption for that language);
+ *  - otherwise the SPOKEN `text` wins (the shipped Khmer story carries an
+ *    ENGLISH gloss in `subtitle`, so a Khmer caption must use the spoken
+ *    Khmer line);
+ *  - with no language information at all, the historical behaviour applies
+ *    (gloss first, spoken text as the fallback).
+ *
  * Fails loudly when the resolved text is empty.
  */
-export function getSubtitleText(line: { subtitle?: string; text?: string }): string {
-  const text =
-    (typeof line?.subtitle === 'string' && line.subtitle.trim().length > 0
-      ? line.subtitle
-      : typeof line?.text === 'string'
-        ? line.text
-        : '') || '';
+export function getSubtitleText(
+  line: { subtitle?: string; text?: string },
+  options?: SubtitleOptions
+): string {
+  const caption = (options?.captionLanguage ?? options?.narrationLanguage)?.trim().toLowerCase();
+  const spoken = typeof line?.text === 'string' ? line.text : '';
+  const gloss = typeof line?.subtitle === 'string' ? line.subtitle : '';
+
+  let text: string;
+  if (caption) {
+    if (textMatchesLanguage(gloss, caption)) text = gloss.trim();
+    else if (textMatchesLanguage(spoken, caption)) text = spoken.trim();
+    else text = gloss.trim() || spoken.trim();
+  } else {
+    text = gloss.trim() || spoken.trim();
+  }
+
   const trimmed = text.trim();
   if (!trimmed) {
     throw new Error('getSubtitleText: subtitle text must be a non-empty string.');

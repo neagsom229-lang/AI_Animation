@@ -59,10 +59,17 @@ interface StoryCharacterProps {
 }
 
 /**
- * Per-character model dispatch: `vrmUrl` → the Goal 3 VRM path (facial
- * animation, solved never-T-pose, gaze), `modelUrl` → the Phase B GLB path
- * as fallback. Returns null only if the spec has neither (the caller then
- * falls back to the legacy anima3d rig).
+ * Per-character model dispatch.
+ *
+ * Round 4 order: **the GLB/Mixamo human is primary, the VRM is the
+ * fallback.** A rigged GLB can carry a face rig (viseme morphs or a jaw
+ * bone — see remotion/compositions/GlbCharacter.tsx), authored Idle/Talk/
+ * Gesture/Walk clips and a foot-planting pass; a VRM only carries an
+ * expression rig. So a story that supplies `modelUrl` gets the better
+ * path, and `vrmUrl` is what the film falls back to when it does not.
+ *
+ * Returns null only if the spec has neither (the caller then falls back to
+ * the legacy anima3d rig).
  */
 const StoryCharacter: React.FC<StoryCharacterProps> = ({
   spec,
@@ -74,6 +81,19 @@ const StoryCharacter: React.FC<StoryCharacterProps> = ({
   mouthCues,
   gazeTarget
 }) => {
+  if (spec && spec.modelUrl) {
+    return (
+      <GlbCharacter
+        modelUrl={spec.modelUrl}
+        position={position}
+        rotationY={rotationY}
+        action={action}
+        env={env}
+        lineStartFrame={lineStartFrame}
+        seed={spec.id || 'glb'}
+      />
+    );
+  }
   if (spec && spec.vrmUrl) {
     return (
       <VrmCharacter
@@ -87,18 +107,6 @@ const StoryCharacter: React.FC<StoryCharacterProps> = ({
         mouthCues={mouthCues}
         seed={spec.id || 'vrm'}
         gazeTarget={gazeTarget}
-      />
-    );
-  }
-  if (spec && spec.modelUrl) {
-    return (
-      <GlbCharacter
-        modelUrl={spec.modelUrl}
-        position={position}
-        rotationY={rotationY}
-        action={action}
-        env={env}
-        lineStartFrame={lineStartFrame}
       />
     );
   }
@@ -156,8 +164,12 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
 
   // Subtitle layer is language-aware (--lang): font + text come from the same
   // resolved narration language that drove the voice.
-  const subtitleLanguage = (voiceData && voiceData.language) || (story && story.language) || 'km';
-  const subtitleFont = getSubtitleFont(subtitleLanguage);
+  const narrationLanguage = (voiceData && voiceData.language) || (story && story.language) || 'km';
+  // A story may override the caption language (e.g. Khmer narration with an
+  // English caption track); by default the caption follows the narration.
+  const captionLanguage = (story && story.subtitleLanguage) || narrationLanguage;
+  const subtitleFont = getSubtitleFont(narrationLanguage);
+  const subtitleOptions = { narrationLanguage, captionLanguage };
 
   // Draft mode lays the film out at the final 1920×1080 coordinates and
   // renders the whole thing scaled — layout math never diverges between
@@ -241,6 +253,7 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
               characters={story.characters || []}
               world={story.world}
               draft={Boolean(isDraft)}
+              subtitleOptions={subtitleOptions}
             />
           </Sequence>
         );
@@ -274,6 +287,8 @@ interface SceneRendererProps {
   world?: string;
   /** Draft mode: 720p raster, low shadows, no post overlays. */
   draft?: boolean;
+  /** Narration + caption languages, for language-aware subtitle text. */
+  subtitleOptions?: { narrationLanguage: string; captionLanguage: string };
 }
 
 const SceneRenderer: React.FC<SceneRendererProps> = ({
@@ -285,7 +300,8 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
   subtitleFont,
   characters,
   world,
-  draft
+  draft,
+  subtitleOptions
 }) => {
   // Frames inside a <Sequence> are LOCAL to that sequence.
   const frame = useCurrentFrame();
@@ -443,10 +459,18 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
             zIndex: 5,
             backdropFilter: spec.shot === 'wide' ? 'blur(6px)' : 'blur(4px)',
             WebkitBackdropFilter: spec.shot === 'wide' ? 'blur(6px)' : 'blur(4px)',
+            // The sharp zone must cover the SUBJECT, not just the middle of
+            // the frame: in the wide shot the monument occupies the upper
+            // half, and the old 60%-ellipse mask blurred the temple into
+            // mush — the exact thing the wide shot exists to show.
             maskImage:
-              'radial-gradient(ellipse 60% 55% at 50% 44%, rgba(0,0,0,0) 42%, rgba(0,0,0,1) 96%)',
+              spec.shot === 'wide'
+                ? 'radial-gradient(ellipse 92% 88% at 50% 46%, rgba(0,0,0,0) 62%, rgba(0,0,0,1) 100%)'
+                : 'radial-gradient(ellipse 70% 62% at 50% 44%, rgba(0,0,0,0) 46%, rgba(0,0,0,1) 96%)',
             WebkitMaskImage:
-              'radial-gradient(ellipse 60% 55% at 50% 44%, rgba(0,0,0,0) 42%, rgba(0,0,0,1) 96%)'
+              spec.shot === 'wide'
+                ? 'radial-gradient(ellipse 92% 88% at 50% 46%, rgba(0,0,0,0) 62%, rgba(0,0,0,1) 100%)'
+                : 'radial-gradient(ellipse 70% 62% at 50% 44%, rgba(0,0,0,0) 46%, rgba(0,0,0,1) 96%)'
           }}
         />
       )}
@@ -464,7 +488,7 @@ const SceneRenderer: React.FC<SceneRendererProps> = ({
       {activeLine && (activeLine.text || activeLine.subtitle ? true : false) && (
         <Subtitle
           key={`${scene.id}-${activeLine.startFrame}`}
-          text={getSubtitleText(activeLine)}
+          text={getSubtitleText(activeLine, subtitleOptions)}
           fontFamily={subtitleFont}
         />
       )}

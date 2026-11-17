@@ -17,6 +17,11 @@
  *
  * Exit code 0 = deterministic; 1 = frame drift detected.
  *
+ * GL BACKEND: the reference is deliberately SOFTWARE GL (SwiftShader), never
+ * the GPU path. `scripts/make.mjs` renders production films with hardware
+ * ANGLE; this script must stay pinned to the software reference so the
+ * byte-identical check compares like with like on every machine.
+ *
  * Usage: node scripts/verify-determinism.mjs [--composition <id>] [--frames <f0,f1,...>]
  */
 
@@ -25,12 +30,16 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
+import { runPreflight, formatPreflight, snapshotChromePids, reapNewRemotionChrome } from './preflight.mjs';
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OUT_DIR = path.join(ROOT, 'out');
 const ENTRY_POINT = path.join(ROOT, 'remotion', 'index.ts');
 const DEFAULT_FRAMES = [0, 15, 30, 45, 60, 75, 89];
+
+/** The determinism reference is the SOFTWARE GL path (see the header). */
+const GL_BACKEND = 'swiftshader';
 
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
@@ -71,6 +80,9 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   mkdirSync(OUT_DIR, { recursive: true });
 
+  for (const line of formatPreflight(runPreflight({ kill: true }))) console.log(line);
+  const chromeBefore = snapshotChromePids();
+
   console.log('[1/5] Bundling Remotion project...');
   const serveUrl = await bundle({ entryPoint: ENTRY_POINT, onProgress: () => {} });
 
@@ -96,6 +108,7 @@ async function main() {
     composition,
     serveUrl,
     codec: 'h264',
+    gl: GL_BACKEND,
     outputLocation: run1,
     ...(inputProps ? { inputProps } : {}),
     onProgress: () => {},
@@ -104,6 +117,7 @@ async function main() {
     composition,
     serveUrl,
     codec: 'h264',
+    gl: GL_BACKEND,
     outputLocation: run2,
     ...(inputProps ? { inputProps } : {}),
     onProgress: () => {},
@@ -122,7 +136,7 @@ async function main() {
         OUT_DIR,
         `determinism-frame-${String(frame).padStart(3, '0')}-pass${pass}.png`
       );
-      await renderStill({ composition, serveUrl, frame, output: file, ...(inputProps ? { inputProps } : {}) });
+      await renderStill({ composition, serveUrl, frame, output: file, gl: GL_BACKEND, ...(inputProps ? { inputProps } : {}) });
       stills.push(sha256(file));
     }
     pass1.push(stills[0]);
@@ -134,6 +148,11 @@ async function main() {
     );
   }
   const framesIdentical = pass1.every((hash, i) => hash === pass2[i]);
+
+  const reaped = reapNewRemotionChrome(chromeBefore);
+  if (reaped.killed > 0) {
+    console.log(`      (reaped ${reaped.killed} Remotion browser process(es))`);
+  }
 
   console.log('[5/5] Verdict');
   console.log(`      video  sha256 run1: ${videoHash1}`);

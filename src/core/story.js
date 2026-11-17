@@ -47,7 +47,7 @@ import { MoodLightingPresets } from '../render/moods.js';
 
 /** Known story vocabulary — unknown values are hard errors (see validateStory). */
 export const KNOWN_ACTIONS = ['idle', 'walk', 'talk', 'turn', 'gesture', 'react'];
-export const KNOWN_CAMERAS = ['dolly', 'orbit', 'crane', 'handheld', 'static'];
+export const KNOWN_CAMERAS = ['dolly', 'dolly-drift', 'orbit', 'crane', 'handheld', 'static'];
 /** Framing per scene — must match Object.keys(SHOT_SPECS) in remotion/lib/camera.ts
  *  (tests/camera.test.js asserts the two vocabularies stay in sync). */
 export const KNOWN_SHOTS = ['close-up', 'medium', 'wide', 'over-shoulder'];
@@ -114,13 +114,18 @@ export function validateStory(story) {
     if (scene.shot === 'over-shoulder') {
       // The shot frames the speaker past a second standing character, so a
       // solo cast (or characters without a 3D model) cannot stage it.
+      // A character is 3D-capable with EITHER a GLB (`modelUrl`, the
+      // primary Mixamo/GLB path) or a VRM (`vrmUrl`, the fallback) —
+      // Round 4 made the GLB primary but the VRM still renders in 3D.
       const modelled = story.characters.filter(
-        (c) => typeof c.modelUrl === 'string' && c.modelUrl.trim().length > 0
+        (c) =>
+          (typeof c.modelUrl === 'string' && c.modelUrl.trim().length > 0) ||
+          (typeof c.vrmUrl === 'string' && c.vrmUrl.trim().length > 0)
       );
       if (modelled.length < 2) {
         throw new Error(
           `Scene "${scene.id}" uses shot "over-shoulder", which needs a second 3D character ` +
-          `to look over — only ${modelled.length} character(s) declare modelUrl.`
+          `to look over — only ${modelled.length} character(s) declare modelUrl or vrmUrl.`
         );
       }
     }

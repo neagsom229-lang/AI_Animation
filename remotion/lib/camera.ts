@@ -17,7 +17,13 @@ import { createNoise2D } from 'simplex-noise';
 import * as THREE from 'three';
 import { mulberry32 } from './randomness.ts';
 
-export type CameraRigType = 'dolly' | 'orbit' | 'crane' | 'handheld' | 'static';
+export type CameraRigType =
+  | 'dolly'
+  | 'dolly-drift'
+  | 'orbit'
+  | 'crane'
+  | 'handheld'
+  | 'static';
 
 export type Vec3 = [number, number, number];
 
@@ -87,6 +93,20 @@ export function getCameraPose(
       });
       const y = 5 + Math.sin(tau * 0.5) * 0.5;
       return { position: [0, y, z], lookAt: [0, 2, 0] };
+    }
+
+    case 'dolly-drift': {
+      // Slow push-in with a lateral drift and a gentle settle — the two-shot
+      // move. Consecutive frames must differ, but the move must never read
+      // as a whip pan, so the drift is a slow sine, not a sweep.
+      const push = interpolate(frame, [0, durationInFrames], [15, 12], {
+        easing: Easing.inOut(Easing.cubic),
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp'
+      });
+      const drift = Math.sin(tau * 0.32) * 0.42;
+      const y = 5 + Math.sin(tau * 0.5) * 0.35 + Math.sin(tau * 0.21) * 0.12;
+      return { position: [drift, y, push], lookAt: [0, 2, 0] };
     }
 
     case 'orbit': {
@@ -230,17 +250,23 @@ export const SHOT_SPECS: Record<ShotType, ShotSpec> = {
     arc: 0.4
   },
   wide: {
-    // Eye-level-ish, tilted up: horizon lands at ~65% from the top (the lower
-    // third), the character stands fully inside the bottom band, and the
-    // temple + sky own the upper two thirds.
-    distance: 11,
-    height: 2.55,
-    target: [0, 3.9, 0],
+    // Round 4: the wide is a MONUMENT shot. The look-at moved off the
+    // character and onto the temple's spine (the galleries now stand 66 m
+    // back at z = -44, the central prang apex at 37.5 m), and the camera
+    // dropped to 4.4 m so the figure reads as a person at the foot of a
+    // mountain rather than a doll in front of a wall.
+    //
+    // The height is pinned by the horizon: `sin(pitch) = 0.1227` puts the
+    // horizon on the lower third (0.648 from the top) at fov 45 — the
+    // framing the wide shot has always used, now with the temple in it.
+    distance: 62,
+    height: 4.4,
+    target: [0, 12.0, -42],
     azimuth: 0,
     dollyStart: 1.18,
     // Narrow sweep: at ±0.5 the start of the arc grazed the listener's
     // bearing and their heads overlapped by ~7 px at distance.
-    arc: 0.3
+    arc: 0.05
   },
   'over-shoulder': {
     distance: OTS_DISTANCE,
@@ -259,6 +285,8 @@ export const SHOT_SPECS: Record<ShotType, ShotSpec> = {
  * adds deterministic motion on top of it:
  *
  *  - dolly     — push from `distance × dollyStart` in to `distance`
+ *  - dolly-drift — the same push PLUS a drifting bearing and a vertical
+ *                  settle (the two-shot move: consecutive frames differ)
  *  - orbit     — sweep ±`arc` around the shot bearing (never behind the set)
  *  - crane     — rise 2.5 m into the shot height
  *  - handheld  — seeded simplex shake around the shot position
@@ -301,6 +329,24 @@ export function getShotPose(
         interpolate(t, [0, 1], [spec.dollyStart, 1], {
           easing: Easing.inOut(Easing.cubic)
         });
+      break;
+    }
+    case 'dolly-drift': {
+      // Slow push-in PLUS a drifting bearing and a gentle vertical settle.
+      // The drift is deliberately a fraction of the shot's own arc so it can
+      // never cross the speaker→listener line (which would line the two
+      // heads up and hide the speaker behind the listener).
+      distance =
+        spec.distance *
+        interpolate(t, [0, 1], [spec.dollyStart, 1], {
+          easing: Easing.inOut(Easing.cubic)
+        });
+      azimuth =
+        spec.azimuth +
+        interpolate(t, [0, 1], [-spec.arc * 0.45, spec.arc * 0.45], {
+          easing: Easing.inOut(Easing.quad)
+        });
+      height = spec.height + Math.sin(t * Math.PI) * 0.12;
       break;
     }
     case 'orbit': {

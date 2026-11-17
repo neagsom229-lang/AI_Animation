@@ -56,9 +56,15 @@ const FOG_DENSITY = 0.010;
 const GROUND_SIZE = 600;
 const GROUND_REPEAT = 150;
 
-/** Sun position: low behind-left of the temple — golden-hour elevation ~16°,
- *  shadows rake long toward the camera. */
-const SUN_POSITION: [number, number, number] = [-22, 10.5, -34];
+/**
+ * Sun position: low and to the camera's left — golden-hour elevation ~16°.
+ *
+ * Round 4: the temple moved back to z = -44 with a 37.5 m apex, so the sun
+ * was moved forward of the monument (z = +16) to keep lighting its WEST
+ * face; from behind, the whole temple would have been a silhouette. The
+ * shadow camera was widened to match the new footprint.
+ */
+const SUN_POSITION: [number, number, number] = [-58, 17, 16];
 
 /**
  * Warm-sand multiplier for every prop material (Goal 3 palette re-grade).
@@ -105,24 +111,24 @@ const Sun: React.FC<{ preset: MoodPreset; quality?: 'draft' | 'final' }> = ({ pr
       intensity={preset.intensity * 1.05}
       position={SUN_POSITION}
       castShadow
-      shadow-mapSize-width={quality === 'draft' ? 512 : 2048}
-      shadow-mapSize-height={quality === 'draft' ? 512 : 2048}
-      shadow-camera-left={-35}
-      shadow-camera-right={35}
-      shadow-camera-top={35}
-      shadow-camera-bottom={-35}
+      shadow-mapSize-width={quality === 'draft' ? 1024 : 2048}
+      shadow-mapSize-height={quality === 'draft' ? 1024 : 2048}
+      shadow-camera-left={-72}
+      shadow-camera-right={72}
+      shadow-camera-top={72}
+      shadow-camera-bottom={-72}
       shadow-camera-near={1}
-      shadow-camera-far={140}
+      shadow-camera-far={260}
       shadow-bias={-0.0004}
       shadow-normalBias={0.03}
     />
-    {/* Camera-side fill: the sun sits behind the temple, so without this the
-        speakers' faces would render as silhouettes. Low intensity, no
-        shadows — it only lifts the shadow side. */}
+    {/* Camera-side fill: the sun sits to the left of the temple, so without
+        this the speakers' faces would render as silhouettes. Low intensity,
+        no shadows — it only lifts the shadow side. */}
     <directionalLight
       color={preset.ambient}
       intensity={preset.intensity * 0.6}
-      position={[6, 8, 18]}
+      position={[14, 10, 26]}
     />
   </>
 );

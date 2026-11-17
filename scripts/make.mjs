@@ -12,9 +12,18 @@
  * --gpu renders with Remotion's `gl: 'angle'` (hardware ANGLE/GPU) for
  * production. NOTE: Remotion renders with its bundled chrome-headless-shell,
  * which only speaks SwiftShader — set CHROME to a full Chrome/Edge install to
- * actually reach hardware ANGLE (Intel/NVIDIA/AMD). The default stays software
- * GL, which is what scripts/verify-determinism.mjs relies on for its
- * byte-identical check. Both modes print ms/frame after the render.
+ * actually reach hardware ANGLE (Intel/NVIDIA/AMD).
+ *
+ * Round 4: the GPU path is now the DEFAULT (production), and the full browser
+ * is auto-detected when CHROME is not set — Remotion's bundled shell cannot
+ * reach the GPU at all, so "default = software" meant "default = no GPU".
+ * Use --software for the software-GL path that scripts/verify-determinism.mjs
+ * uses as the determinism reference.
+ *
+ * A pre-flight runs before the render: it reports free RAM, warns below
+ *   4 GB, reaps stale Remotion browser processes left behind by earlier
+ *   runs, and picks the concurrency (4 on this hardware). After the render
+ *   the browsers this run started are reaped too. See scripts/preflight.mjs.
  *
  * --draft renders 720p with low shadows and no post overlays for iteration;
  * final quality stays 1080p. The bundle is cached between runs
@@ -35,6 +44,15 @@ import { renderMedia, renderStill, selectComposition } from '@remotion/renderer'
 import { getOrCreateBundle } from './lib/bundle-cache.mjs';
 import { validateStory, KNOWN_LANGUAGES } from '../src/core/story.js';
 import { buildSrt } from './lib/srt.mjs';
+import { resolveBrowser } from './lib/browser.mjs';
+import {
+  runPreflight,
+  formatPreflight,
+  snapshotChromePids,
+  reapNewRemotionChrome,
+  MIN_FREE_RAM_MB,
+  DEFAULT_CONCURRENCY
+} from './preflight.mjs';
 import {
   pickContactFrames,
   tileContactSheet,
@@ -49,7 +67,8 @@ export function parseArgs(argv) {
     lang: 'km',
     voice: undefined,
     mock: false,
-    gpu: false,
+    gpu: true,
+    software: false,
     draft: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -58,7 +77,8 @@ export function parseArgs(argv) {
     else if (a === '--lang' && argv[i + 1]) { args.lang = argv[++i]; }
     else if (a === '--voice' && argv[i + 1]) { args.voice = argv[++i]; }
     else if (a === '--mock') { args.mock = true; }
-    else if (a === '--gpu') { args.gpu = true; }
+    else if (a === '--gpu') { args.gpu = true; args.software = false; }
+    else if (a === '--software') { args.software = true; args.gpu = false; }
     else if (a === '--draft') { args.draft = true; }
     else { throw new Error(`Unknown or incomplete argument: ${a}`); }
   }
@@ -137,15 +157,38 @@ async function main() {
 
   const inputProps = { story, voiceData, isMock: mock, isDraft: args.draft };
 
-  // Chrome/Edge selection: set CHROME to a browser executable to override
-  // Remotion's auto-detection (Remotion otherwise uses its bundled headless
-  // shell, which it downloads on first use).
-  const browserExecutable = process.env.CHROME || undefined;
-  // --gpu selects Chromium's ANGLE (hardware) backend for production. The
-  // default is left at Remotion's software path, matching verify:determinism.
-  const glMode = args.gpu ? 'angle' : undefined;
-  const glLabel = args.gpu ? 'angle (GPU)' : 'software (default)';
+  // Chrome/Edge selection: CHROME wins, otherwise a full browser is
+  // auto-detected. Remotion's bundled chrome-headless-shell only speaks
+  // SwiftShader, so the GPU path REQUIRES a full browser.
+  const browser = resolveBrowser(process.env.CHROME);
+  const browserExecutable = browser.executable;
+  // Round 4: the GPU path is the production default. Software GL stays
+  // available (--software) as the determinism reference that
+  // scripts/verify-determinism.mjs compares against.
+  const glMode = args.software ? undefined : 'angle';
+  const glLabel = args.software ? 'software (determinism reference)' : 'angle (GPU)';
   console.log(`[Perf] GL backend for this run: ${glLabel}`);
+  console.log(`[Perf] Browser: ${browser.label}`);
+  if (!args.software && !browser.isFull) {
+    console.warn(
+      '[Warn] No full Chrome/Edge found — the GPU path needs one (Remotion\'s bundled ' +
+        'headless shell is software-GL only). Set CHROME=<path to chrome.exe>.'
+    );
+  }
+
+  // Pre-flight: free RAM, stale-browser reaping, concurrency.
+  const preflight = runPreflight({ kill: true });
+  for (const line of formatPreflight(preflight)) console.log(line);
+  if (preflight.lowMemory) {
+    console.warn(
+      `[Warn] Free RAM is ${preflight.freeMb} MB (< ${MIN_FREE_RAM_MB} MB). ` +
+        'The render may stall or OOM; close other apps or lower the concurrency.'
+    );
+  }
+  // Four tabs keep the run stable on this VM (see the note below).
+  const concurrency = Math.min(DEFAULT_CONCURRENCY, preflight.suggestedConcurrency);
+  console.log(`[Perf] Concurrency: ${concurrency}`);
+  const chromeBefore = snapshotChromePids();
 
   // Step 2: Bundle Remotion project (reused across runs when inputs are
   // unchanged — see scripts/lib/bundle-cache.mjs)
@@ -189,7 +232,7 @@ async function main() {
     // concurrency (half the cores = 8) spawns enough Chromium tabs to OOM
     // them and they die mid-render, stalling the frame counter.
     // Four tabs keep the run stable with headroom.
-    concurrency: 4,
+    concurrency,
     ...(glMode ? { gl: glMode } : {}),
     ...(browserExecutable ? { browserExecutable } : {}),
     onProgress: ({ progress }) => {
@@ -203,11 +246,23 @@ async function main() {
       `(${msPerFrame.toFixed(1)} ms/frame, gl=${glLabel})`
   );
 
+  // Reap the browsers this run started — a leftover headless Chrome holds
+  // hundreds of MB and would starve the next render.
+  const reaped = reapNewRemotionChrome(chromeBefore);
+  if (reaped.killed > 0) {
+    console.log(`[Perf] Reaped ${reaped.killed} Remotion browser process(es) after the render.`);
+  }
+
   console.log(`\nSuccessfully rendered film to: ${outVideoPath}`);
 
-  // Subtitles built from the same data the film is timed with.
+  // Subtitles built from the same data the film is timed with. The caption
+  // language follows the narration unless the story overrides it.
   const srtPath = path.join(outDir, `${storyName}.srt`);
-  fs.writeFileSync(srtPath, buildSrt(voiceData), 'utf-8');
+  fs.writeFileSync(
+    srtPath,
+    buildSrt(voiceData, undefined, { captionLanguage: story.subtitleLanguage }),
+    'utf-8'
+  );
   console.log(`Wrote subtitles: ${srtPath}`);
 
   // Step 4: render evenly spaced stills across the WHOLE clip and tile them

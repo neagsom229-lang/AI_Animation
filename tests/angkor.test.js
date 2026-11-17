@@ -1,8 +1,14 @@
 /**
  * @fileoverview Layout invariants for the procedural Angkor Wat set
  * (remotion/lib/angkor.ts). These tests are the contract that keeps the
- * monument standing: five prangs, quincunx order, causeway across a real
- * moat, populated colonnades — and byte-identical layout across builds.
+ * monument standing: five prangs, quincunx order, the central prang
+ * dominating the corners, a causeway across a real moat, populated
+ * colonnades — and byte-identical layout across builds.
+ *
+ * Round 4 added the SCALE contract: the monument is sized from the human.
+ * A 1.70 m figure must read against a ~4.2 m gallery and a ~37 m apex, and
+ * the central prang must be 3× the corners or the silhouette collapses into
+ * a brown pyramid.
  */
 
 'use strict';
@@ -15,13 +21,20 @@ import {
   TIERS,
   PRANGS,
   CENTRAL_PRANG_APEX_M,
+  CENTRAL_TO_CORNER_RATIO,
+  HUMAN_HEIGHT_M,
   MOAT_FRONT_Z,
   MOAT_BACK_Z,
   MOAT_WIDTH_X,
+  MOAT_WATER_Y,
   CAUSEWAY_PATH,
   CAUSEWAY_BRIDGE,
   CAUSEWAY_LENGTH_M,
   PALM_COUNT,
+  FOREST_COUNT,
+  LOTUS_COUNT,
+  NAGA_HOOD_COUNT,
+  nagaRailPath,
 } from '../remotion/lib/angkor.ts';
 
 test('layout is byte-identical across builds (determinism)', () => {
@@ -47,6 +60,42 @@ test('five prangs in a quincunx; central is tallest', () => {
   assert.ok(CENTRAL_PRANG_APEX_M > 20, 'central prang must read as a mountain, not a turret');
 });
 
+test('the central prang dominates: 3x the corners (silhouette contract)', () => {
+  assert.ok(
+    Math.abs(CENTRAL_TO_CORNER_RATIO - 3) < 1e-6,
+    `central/corner height ratio is ${CENTRAL_TO_CORNER_RATIO.toFixed(3)}, expected 3.000`
+  );
+  const [central, ...corners] = PRANGS;
+  assert.ok(
+    central.radius > corners[0].radius * 1.4,
+    'the central prang must also be visibly wider than the corners'
+  );
+  // The apex must clear the corners by a wide margin or the eye reads one
+  // mass instead of a dominant tower with satellites.
+  const cornerApex = Math.max(...corners.map((c) => c.position[1] + c.height));
+  assert.ok(
+    CENTRAL_PRANG_APEX_M - cornerApex > 8,
+    `central apex only ${(CENTRAL_PRANG_APEX_M - cornerApex).toFixed(1)} m above the corners`
+  );
+});
+
+test('the monument is scaled from the human, not the other way round', () => {
+  // Gallery colonnade: ~4–5 m, i.e. 2.5–3× a person.
+  const outerColonnade = TIERS[0].colonnade;
+  assert.ok(
+    outerColonnade >= 3.8 && outerColonnade <= 5.0,
+    `outer gallery colonnade is ${outerColonnade} m, expected ~4–5 m`
+  );
+  assert.ok(
+    outerColonnade / HUMAN_HEIGHT_M > 2.2,
+    'a person must be clearly shorter than the gallery they stand in front of'
+  );
+  // Apex: monumental but still framable (15–30× a person).
+  const ratio = CENTRAL_PRANG_APEX_M / HUMAN_HEIGHT_M;
+  assert.ok(ratio > 15, `apex is only ${ratio.toFixed(1)}× human height`);
+  assert.ok(ratio < 30, `apex is ${ratio.toFixed(1)}× human height — unframable in a wide`);
+});
+
 test('three galleries, floors rise, footprints shrink', () => {
   assert.equal(TIERS.length, 3);
   for (let i = 1; i < TIERS.length; i++) {
@@ -54,11 +103,26 @@ test('three galleries, floors rise, footprints shrink', () => {
     assert.ok(TIERS[i].size[0] < TIERS[i - 1].size[0], 'width must shrink');
     assert.ok(TIERS[i].size[2] < TIERS[i - 1].size[2], 'depth must shrink');
   }
+  // Each tier is a colonnade + a roof slab, and they stack without gaps.
+  for (let i = 0; i < TIERS.length; i++) {
+    const tier = TIERS[i];
+    assert.ok(
+      Math.abs(tier.colonnade + tier.roof - tier.size[1]) < 1e-9,
+      `${tier.name}: height must be colonnade + roof`
+    );
+    if (i > 0) {
+      assert.ok(
+        Math.abs(TIERS[i - 1].floor + TIERS[i - 1].size[1] - tier.floor) < 1e-9,
+        `${tier.name} must stand exactly on the tier below`
+      );
+    }
+  }
 });
 
 test('the moat crosses the site; the bridge spans it; the path approaches', () => {
   assert.ok(MOAT_FRONT_Z > MOAT_BACK_Z, 'moat z ordering');
   assert.ok(MOAT_WIDTH_X >= 70, 'moat must run edge to edge');
+  assert.ok(MOAT_WATER_Y < 0, 'the water must sit below the bank lip');
   const bridgeZMin = CAUSEWAY_BRIDGE.position[2] - CAUSEWAY_BRIDGE.size[2] / 2;
   const bridgeZMax = CAUSEWAY_BRIDGE.position[2] + CAUSEWAY_BRIDGE.size[2] / 2;
   assert.ok(bridgeZMin <= MOAT_BACK_Z + 0.01, 'bridge must reach the far bank');
@@ -90,8 +154,45 @@ test('palms stay out of the camera corridor and the moat', () => {
   }
 });
 
-test('naga finials and stair treads are populated', () => {
-  const { nagas, stairs } = buildAngkorLayout();
-  assert.ok(nagas.length >= 28, `expected >=28 naga finials, got ${nagas.length}`);
-  assert.equal(stairs.length, 12);
+test('a dense forest line stands behind the temple', () => {
+  const { forest } = buildAngkorLayout();
+  assert.equal(forest.length, FOREST_COUNT);
+  assert.ok(FOREST_COUNT >= 200, 'the jungle behind the monument must be dense');
+  for (const f of forest) {
+    assert.ok(f.position[2] < -70, 'forest must sit behind the temple');
+  }
+});
+
+test('lotus pads float on the moat, clear of the causeway', () => {
+  const { lotus } = buildAngkorLayout();
+  assert.equal(lotus.length, LOTUS_COUNT);
+  for (const l of lotus) {
+    assert.ok(Math.abs(l.position[0]) > 3.6, 'a lotus pad must not sit on the causeway');
+    assert.ok(
+      l.position[2] < MOAT_FRONT_Z && l.position[2] > MOAT_BACK_Z,
+      'a lotus pad must be on the water'
+    );
+    assert.ok(l.position[1] > MOAT_WATER_Y, 'a lotus pad must float on the surface');
+  }
+});
+
+test('naga balustrade is a continuous rail with hooded heads', () => {
+  const { nagaHoods, nagaRails } = buildAngkorLayout();
+  assert.equal(nagaHoods.length, NAGA_HOOD_COUNT * 2);
+  assert.ok(NAGA_HOOD_COUNT >= 3 && NAGA_HOOD_COUNT <= 5, '3–5 hoods per rail');
+  for (const rail of nagaRails) {
+    const path = nagaRailPath(rail, 16);
+    assert.equal(path.length, 17);
+    // Continuous: consecutive samples never jump.
+    for (let i = 1; i < path.length; i += 1) {
+      const dz = Math.abs(path[i].z - path[i - 1].z);
+      const dy = Math.abs(path[i].y - path[i - 1].y);
+      assert.ok(dz < 3 && dy < 0.6, 'the naga rail must be a continuous body');
+    }
+  }
+});
+
+test('stair treads are populated', () => {
+  const { stairs } = buildAngkorLayout();
+  assert.equal(stairs.length, 10);
 });
