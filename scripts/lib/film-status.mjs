@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { sourceResolutionGate } from './image-check.mjs';
 
 const IMG_RE = /^(scene[-_ ]?\d+|\d+)\.(png|jpe?g)$/i;
 
@@ -44,7 +45,7 @@ export function wrongFolderFixCommands(hits, cfg) {
 }
 
 /** Compute per-scene status rows + overall verdict. */
-export function computeStatus({ root, cfg, story, voiceData, timeline, configHashValue }) {
+export async function computeStatus({ root, cfg, story, voiceData, timeline, configHashValue }) {
   const rows = [];
   const reasons = [];
   const scenes = story.scenes || [];
@@ -79,8 +80,16 @@ export function computeStatus({ root, cfg, story, voiceData, timeline, configHas
     if (!voice) warnings.push('no voice');
     if (entry && entry.qualityWarnings) warnings.push(...entry.qualityWarnings);
     if (entry && entry.watermarkCheck === false) warnings.push('watermark check required');
+    if (entry && entry.matchesNarration === false && mediaType !== 'world3d') warnings.push('matches-narration check required');
+    // Round 9 item 1: source resolution gate surfaced in status.
+    const srcW = entry && entry.sourceWidth;
+    const gate = srcW !== undefined ? sourceResolutionGate(srcW, cfg.quality.minSourceWidth, { draft: false }) : null;
+    if (gate && gate.hardFail) warnings.push(gate.warning);
     rows.push({
       scene: spec.id, index: i + 1, mediaType, image, depth, reviewed, voice,
+      sourceWidth: srcW ?? null,
+      upscaled: entry ? Boolean(entry.upscaled) : false,
+      matchesNarration: entry ? Boolean(entry.matchesNarration) : false,
       duration, cache: entry ? 'manifest' : 'none', warnings,
     });
     if (warnings.length) reasons.push(`${spec.id}: ${warnings.join(', ')}`);
@@ -88,6 +97,23 @@ export function computeStatus({ root, cfg, story, voiceData, timeline, configHas
 
   const wrongFolder = findWrongFolderImages(root, cfg);
   if (wrongFolder.length) reasons.push(`${wrongFolder.length} source image(s) in OUTPUT folders (run the printed copy+ingest commands)`);
+
+  // Round 9 item 2: exact + near-duplicate detection across scenes (blocking).
+  let duplicateGroups = [];
+  let requeue = [];
+  try {
+    const { buildImageRecords, groupDuplicates, requeueBlock } = await import('./film-duplicates.mjs');
+    const promptPath = path.resolve(root, cfg.intake.promptFile);
+    const promptsText = fs.existsSync(promptPath) ? fs.readFileSync(promptPath, 'utf8') : '';
+    const records = buildImageRecords({ story, promptsDoc: promptsText, root });
+    duplicateGroups = groupDuplicates(records);
+    if (duplicateGroups.length) {
+      requeue = duplicateGroups.map(requeueBlock);
+      reasons.push(`${duplicateGroups.length} duplicate group(s) — BLOCKING for final render (see REQUEUE)`);
+    }
+  } catch (e) {
+    reasons.push(`duplicate check failed: ${e.message}`);
+  }
 
   // Stale preview sheet check.
   const sheetMeta = path.resolve(root, cfg.paths.preview, 'contact.meta.json');
@@ -107,6 +133,8 @@ export function computeStatus({ root, cfg, story, voiceData, timeline, configHas
     scenes: rows,
     wrongFolder,
     wrongFolderFixes: wrongFolderFixCommands(wrongFolder, cfg),
+    duplicateGroups,
+    requeue,
     sheetStale,
     releasable,
     reasons,
