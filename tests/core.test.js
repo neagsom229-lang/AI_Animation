@@ -19,7 +19,7 @@ test('validateStory validates correct story', () => {
     theme: 'Testing',
     tone: 'epic',
     language: 'en',
-    characters: [{ id: 'hero', name: 'Hero' }],
+    characters: ['reach'],
     scenes: [{ id: 's1', name: 'Scene 1', dur: 5 }]
   };
   assert.strictEqual(validateStory(validStory), true);
@@ -28,13 +28,13 @@ test('validateStory validates correct story', () => {
 test('validateStory throws on invalid story', () => {
   assert.throws(() => validateStory(null), /object/);
   assert.throws(() => validateStory({ title: '', genre: 'a', theme: 'b', characters: [{id: '1', name: 'A'}], scenes: [] }), /title/);
-  assert.throws(() => validateStory({ title: 'A', genre: 'a', theme: 'b', characters: [{id: '1', name: 'A'}], scenes: [{ id: '1', name: 'S', dur: 0 }] }), /positive dur/);
+  assert.throws(() => validateStory({ title: 'A', genre: 'a', theme: 'b', characters: [{ id: 'reach', name: 'Reach' }], scenes: [{ id: 's1', name: 'S', dur: 0 }] }), /positive dur/);
 });
 
 test('validateStory rejects unknown camera with the valid list in the message', () => {
   const story = {
     title: 'T', genre: 'g', theme: 'th', language: 'en',
-    characters: [{ id: 'n', name: 'N' }],
+    characters: [{ id: 'reach', name: 'Reach' }],
     scenes: [{ id: 's1', name: 'S', dur: 3, camera: 'spiral' }]
   };
   assert.throws(() => validateStory(story), (err) => {
@@ -45,7 +45,7 @@ test('validateStory rejects unknown camera with the valid list in the message', 
 test('validateStory rejects unknown mood with the valid list in the message', () => {
   const story = {
     title: 'T', genre: 'g', theme: 'th', language: 'en',
-    characters: [{ id: 'n', name: 'N' }],
+    characters: [{ id: 'reach', name: 'Reach' }],
     scenes: [{ id: 's1', name: 'S', dur: 3, mood: 'sunset' }]
   };
   assert.throws(() => validateStory(story), (err) => {
@@ -71,9 +71,9 @@ test('resolveMood throws on unknown moods (no silent warm-dawn fallback)', () =>
 test('validateStory rejects unknown action and unknown action character', () => {
   const base = {
     title: 'T', genre: 'g', theme: 'th', language: 'en',
-    characters: [{ id: 'hero', name: 'H' }],
+    characters: [{ id: 'reach', name: 'Reach' }],
   };
-  const badAction = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, actions: [{ character: 'hero', action: 'fly' }] }] };
+  const badAction = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, actions: [{ character: 'reach', action: 'fly' }] }] };
   assert.throws(() => validateStory(badAction), (err) => {
     return /has unknown action "fly"/.test(err.message) && err.message.includes('idle, walk, talk, turn, gesture, react');
   });
@@ -84,9 +84,9 @@ test('validateStory rejects unknown action and unknown action character', () => 
 test('validateStory rejects empty dialogue text and unknown speaker', () => {
   const base = {
     title: 'T', genre: 'g', theme: 'th', language: 'en',
-    characters: [{ id: 'hero', name: 'H' }],
+    characters: [{ id: 'reach', name: 'Reach' }],
   };
-  const emptyText = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, dialogue: [{ speaker: 'hero', text: '   ' }] }] };
+  const emptyText = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, dialogue: [{ speaker: 'reach', text: '   ' }] }] };
   assert.throws(() => validateStory(emptyText), /empty or missing text/);
   const badSpeaker = { ...base, scenes: [{ id: 's1', name: 'S', dur: 3, dialogue: [{ speaker: 'nobody', text: 'hello' }] }] };
   assert.throws(() => validateStory(badSpeaker), /unknown speaker "nobody"/);
@@ -95,7 +95,7 @@ test('validateStory rejects empty dialogue text and unknown speaker', () => {
 test('validateStory rejects unknown language', () => {
   const story = {
     title: 'T', genre: 'g', theme: 'th', language: 'fr',
-    characters: [{ id: 'n', name: 'N' }],
+    characters: [{ id: 'reach', name: 'Reach' }],
     scenes: [{ id: 's1', name: 'S', dur: 3 }]
   };
   assert.throws(() => validateStory(story), (err) => /language "fr" is unknown/.test(err.message) && err.message.includes('km, en'));
@@ -104,7 +104,7 @@ test('validateStory rejects unknown language', () => {
 test('validateStory rejects unknown shot with the valid list in the message', () => {
   const story = {
     title: 'T', genre: 'g', theme: 'th', language: 'en',
-    characters: [{ id: 'n', name: 'N' }],
+    characters: [{ id: 'reach', name: 'Reach' }],
     scenes: [{ id: 's1', name: 'S', dur: 3, shot: 'extreme-wide' }]
   };
   assert.throws(() => validateStory(story), (err) => {
@@ -116,26 +116,20 @@ test('validateStory rejects unknown shot with the valid list in the message', ()
 test('validateStory requires a second modelled character for over-shoulder', () => {
   const solo = {
     title: 'T', genre: 'g', theme: 'th', language: 'en',
-    characters: [{ id: 'a', name: 'A', modelUrl: 'public/models/characters/casual_male.glb' }],
+    characters: [{ id: 'reach', name: 'Reach' }],
     scenes: [{ id: 's1', name: 'S', dur: 3, shot: 'over-shoulder' }]
   };
   assert.throws(() => validateStory(solo), (err) => {
     return /over-shoulder/.test(err.message) && err.message.includes('second 3D character');
   });
-  // Two characters WITHOUT modelUrl still cannot stage it (nothing to render).
+  // Two characters WITHOUT a 3D model (modelType "none") still cannot stage it.
   const noModels = {
     ...solo,
-    characters: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }]
+    characters: [{ id: 'jaya', name: 'Jaya' }, { id: 'zhou', name: 'Zhou' }]
   };
-  assert.throws(() => validateStory(noModels), /only 0 character\(s\) declare modelUrl/);
-  // Two modelled characters → valid.
-  const duo = {
-    ...solo,
-    characters: [
-      { id: 'a', name: 'A', modelUrl: 'public/models/characters/casual_male.glb' },
-      { id: 'b', name: 'B', modelUrl: 'public/models/characters/casual_female.glb' }
-    ]
-  };
+  assert.throws(() => validateStory(noModels), /only 0 character\(s\) have a 3D model\./);
+  // Two modelled characters (VRMs from the library, Round-5 string form) → valid.
+  const duo = { ...solo, characters: ['reach', 'minea'] };
   assert.strictEqual(validateStory(duo), true);
 });
 

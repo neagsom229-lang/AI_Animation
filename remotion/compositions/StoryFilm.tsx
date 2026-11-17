@@ -33,6 +33,7 @@ import {
 } from '../lib/camera.ts';
 import { buildStoryTimeline, type TimedScene, type TimedLine, type RhubarbCue } from '../lib/story-timing.ts';
 import { getSubtitleFont, getSubtitleText, SUBTITLE_LAYOUT } from '../lib/subtitles.ts';
+import { resolveLibraryCast } from '../lib/cast.ts';
 import { AnimaCharacter } from './AnimaCharacter';
 import { GlbCharacter } from './GlbCharacter';
 import { VrmCharacter } from './VrmCharacter';
@@ -48,6 +49,7 @@ import { DustParticles } from './DustParticles';
 const GAZE_HEAD_HEIGHT = 1.5;
 
 interface StoryCharacterProps {
+  /** The resolved library entry (see src/characters/library.js). */
   spec: any;
   position: [number, number, number];
   rotationY: number;
@@ -59,17 +61,20 @@ interface StoryCharacterProps {
 }
 
 /**
- * Per-character model dispatch.
+ * Per-character model dispatch, driven by the CHARACTER LIBRARY.
  *
- * Round 4 order: **the GLB/Mixamo human is primary, the VRM is the
- * fallback.** A rigged GLB can carry a face rig (viseme morphs or a jaw
- * bone — see remotion/compositions/GlbCharacter.tsx), authored Idle/Talk/
- * Gesture/Walk clips and a foot-planting pass; a VRM only carries an
- * expression rig. So a story that supplies `modelUrl` gets the better
- * path, and `vrmUrl` is what the film falls back to when it does not.
+ * Round 5: the story references characters by id only; the library entry
+ * decides the model, the face rig, the scale and the rendering style.
  *
- * Returns null only if the spec has neither (the caller then falls back to
- * the legacy anima3d rig).
+ *  - `modelType: "glb"` → the GLB / Mixamo path (viseme morphs or a jaw
+ *    bone, clip blending, foot planting),
+ *  - `modelType: "vrm"` → the VRM fallback (expression rig, gaze),
+ *  - `modelType: "none"` → no model at all (the caller falls back to the
+ *    legacy anima3d rig),
+ *  - `style: "relief"` → the model's own materials are replaced by the
+ *    carved-sandstone material of the Angkor Wat bas-reliefs, so a
+ *    mismatched (e.g. modern) figure reads as part of the monument
+ *    instead of clashing with it.
  */
 const StoryCharacter: React.FC<StoryCharacterProps> = ({
   spec,
@@ -81,36 +86,39 @@ const StoryCharacter: React.FC<StoryCharacterProps> = ({
   mouthCues,
   gazeTarget
 }) => {
-  if (spec && spec.modelUrl) {
+  if (!spec || spec.modelType === 'none') return null;
+  const style = spec.style === 'relief' ? 'relief' : 'default';
+  if (spec.modelType === 'glb') {
     return (
       <GlbCharacter
         modelUrl={spec.modelUrl}
         position={position}
         rotationY={rotationY}
+        scale={typeof spec.scale === 'number' ? spec.scale : 1}
         action={action}
         env={env}
         lineStartFrame={lineStartFrame}
         seed={spec.id || 'glb'}
+        style={style}
+        clipMap={spec.clipMap}
       />
     );
   }
-  if (spec && spec.vrmUrl) {
-    return (
-      <VrmCharacter
-        modelUrl={spec.vrmUrl}
-        position={position}
-        rotationY={rotationY}
-        scale={typeof spec.vrmScale === 'number' ? spec.vrmScale : 1}
-        action={action}
-        env={env}
-        lineStartFrame={lineStartFrame}
-        mouthCues={mouthCues}
-        seed={spec.id || 'vrm'}
-        gazeTarget={gazeTarget}
-      />
-    );
-  }
-  return null;
+  return (
+    <VrmCharacter
+      modelUrl={spec.modelUrl}
+      position={position}
+      rotationY={rotationY}
+      scale={typeof spec.scale === 'number' ? spec.scale : 1}
+      action={action}
+      env={env}
+      lineStartFrame={lineStartFrame}
+      mouthCues={mouthCues}
+      seed={spec.id || 'vrm'}
+      gazeTarget={gazeTarget}
+      style={style}
+    />
+  );
 };
 
 export interface StoryFilmProps {
@@ -161,6 +169,11 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
   // Timeline is a pure function of voiceData + fps (see remotion/lib/story-timing.ts).
   const timeline = buildStoryTimeline(voiceData, fps);
   const sceneSpecs = story.scenes || [];
+
+  // Round 5: the cast comes from the character library, not from the story.
+  // A story names ids; the library owns the models, faces, heights, clips
+  // and rendering style.
+  const cast = resolveLibraryCast(story.characters || [], story.characterVariants || {});
 
   // Subtitle layer is language-aware (--lang): font + text come from the same
   // resolved narration language that drove the voice.
@@ -250,7 +263,7 @@ export const StoryFilm: React.FC<StoryFilmProps> = ({
               rig={rig}
               fps={fps}
               subtitleFont={subtitleFont}
-              characters={story.characters || []}
+              characters={cast}
               world={story.world}
               draft={Boolean(isDraft)}
               subtitleOptions={subtitleOptions}

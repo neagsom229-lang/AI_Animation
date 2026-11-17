@@ -183,12 +183,15 @@ test('GlbCharacter seeks the mixer with mixer.setTime(frame / fps)', () => {
 test('StoryFilm renders the character through the VRM/GLB dispatch', () => {
   const src = readFileSync(STORY_FILM, 'utf8');
   // Speaker and listener are dispatched per cast member through
-  // StoryCharacter: vrmUrl → VrmCharacter, modelUrl → GlbCharacter fallback.
+  // StoryCharacter. Round 5: the cast comes from the CHARACTER LIBRARY, so
+  // the dispatch keys on the library's `modelType` (glb = the Mixamo/GLB
+  // human, vrm = the fallback), not on which URL the story happens to carry.
   assert.ok(/<StoryCharacter\b/.test(src), 'StoryFilm must dispatch characters through StoryCharacter');
   assert.ok(/spec=\{charSpec\}/.test(src), 'the speaker dispatch must receive the story cast member');
   assert.ok(/action=\{charAction\}/.test(src), 'the speaker must receive the scene action');
-  assert.ok(/if \(spec && spec\.vrmUrl\)/.test(src), 'vrmUrl must come from the story cast');
-  assert.ok(/if \(spec && spec\.modelUrl\)/.test(src), 'modelUrl must come from the story cast');
+  assert.ok(/resolveLibraryCast\(/.test(src), 'the cast must be resolved from the character library');
+  assert.ok(/modelType === 'glb'/.test(src), 'the GLB path must be selected by the library modelType');
   assert.ok(/<VrmCharacter\b/.test(src), 'StoryFilm must render the VRM path');
-  assert.ok(/<GlbCharacter\b/.test(src), 'StoryFilm must keep the GLB fallback path');
+  assert.ok(/<GlbCharacter\b/.test(src), 'StoryFilm must keep the GLB path');
+  assert.ok(/style=\{style\}/.test(src), 'the relief style must reach the character components');
 });

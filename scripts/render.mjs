@@ -21,6 +21,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveBrowser } from './lib/browser.mjs';
+import { validateCharacterLibrary } from '../src/characters/library.js';
 import {
   runPreflight,
   formatPreflight,
@@ -62,6 +63,7 @@ function parseArgs(argv) {
  */
 function storyInputProps(storyPath, voicePath) {
   const story = JSON.parse(fs.readFileSync(path.resolve(storyPath), 'utf8'));
+  validateCharacterLibrary();
   const voiceFile = path.resolve(voicePath);
   if (!fs.existsSync(voiceFile)) {
     throw new Error(

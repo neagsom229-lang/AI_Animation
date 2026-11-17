@@ -158,22 +158,32 @@ Mixamo walk carries the source rig's slide:
    If a clip needs more than that, the source contact keys were not
    preserved — fix the bake, not the clamp.
 
-## Step 4 — Tell me
+## Step 0 — Image-to-3D (when no character GLBs exist yet)
 
-One message with the file list is enough. Then I will:
+`assets-src/characters/` is empty (re-checked 2026-11-17). Until era-correct
+character GLBs land, do **NOT** import or retarget anything — instead document
+the pipeline so it is ready to consume assets the moment they arrive. The
+fallback style (`style: "relief"`) renders the existing anime VRMs as carved
+sandstone bas-reliefs (see `remotion/lib/relief.ts`), so the mismatched realism
+does not show against the 12th-century Angkor Wat set.
 
-- point the story `modelUrl` at the new GLBs (VRMs stay as documented fallback),
-- drive `AnimationMixer.setTime(frame / fps)` (frame-pure, never clock-driven —
-  already how the GLB path works),
-- cross-fade Idle↔Talk↔Gesture weights, weight-shift idle already in the code,
-- blink (seeded, 3–5 s) and saccades (already implemented) unchanged,
-- lip-sync: if the mesh keeps viseme shape keys (MPFB keeps face targets),
-  drive `A I U E O` from the 20 Hz envelope (and Rhubarb cues if you run a
-  pass over the audio); **otherwise** drive the MPFB **jaw bone** with the
-  same envelope — that is the documented fallback the brief allows,
-- verify no T-pose at any sampled frame, scale figures to 1.65–1.75 m
-  (measure `head_top - feet` from the rig),
-- keep mixer playback strictly `setTime(frame/fps)`.
+When character assets do arrive, the intake order is:
+
+1. **Image-to-3D** — generate a base mesh from reference art (front/side
+   turnaround preferred) using any CC0/CC-BY image-to-3D tool. Record the
+   exact tool, model, and prompt in CREDITS.md.
+2. **Blender cleanup** — import the GLB/OBJ, decimate to ≤ 5 MB, bake
+   materials to PBR (baseColor/normal/roughness, textures ≤ 2k), retopologize
+   for a humanoid skeleton, add a `Jaw` bone or viseme morph targets, and
+   scale to 1.65–1.75 m (measure `head_top - feet`). Export as one GLB per
+   character with all four clips (`Idle`, `Talk`, `Gesture`, `Walk`) baked in.
+3. **Mixamo clips** — if the mesh does not ship usable animation, upload to
+   Mixamo (Adobe, free, royalty-free for use in projects — **not CC0**), grab
+   Idle/Talk/Gesture/Walk clips, retarget to the humanoid rig, bake, and
+   merge into the character GLB. Mixamo animations are **not redistributable
+   as raw assets** — they may only be used inside the rendered film.
+4. **Register in CREDITS.md** — exact license and source of every file, plus
+   a flag for any non-CC0 file.
 
 ## Licensing notes (read before substituting anything)
 
@@ -223,4 +233,26 @@ and the arms were close to static — that is what "procedural/stiff" meant.
 They are now roughly twice as alive, and they are alive *with the voice*.
 They are still not alive like a human: the underlying VRM is an anime
 placeholder, and no amount of procedural motion fixes the asset.
+
+## Round-5 measurement (bigger, readable motion)
+
+Round 5 raised the procedural amplitudes so the torso and arms read at
+24–30 fps: chest breathing `0.016 → 0.05 rad`, weight-shift hips/chest
+`0.055 → 0.10 rad`, spine counter-rotation `0.035 → 0.07 rad`, head sway
+`0.022 → 0.035 rad`, and the speech-peak hand gesture `0.34 → 0.48 rad`.
+Same measurement (`--scene k2 --shot close-up`, 8 frames, every 30 frames,
+plain strip without debug overlays):
+
+| | head | torso | arm |
+|---|---|---|---|
+| before Round 5 (mean above background) | 1.200 | −0.382 | −2.085 |
+| after Round 5 (mean above background) | **3.156** | **1.909** | **−0.431** |
+| before Round 5 (mean visible-change fraction) | 77.7 % | 73.4 % | 66.0 % |
+| after Round 5 (mean visible-change fraction) | **80.8 %** | **77.3 %** | **69.2 %** |
+
+The torso went from *negative* (camera drift dominated) to clearly positive;
+the head more than doubled; the arm improved but is still partly masked by
+the camera move. The plain 8-frame strip is
+`out/review/motion-strip-round5-plain.png` (no debug overlays; pass `--debug`
+to `scripts/motion-proof.mjs` for the region boxes).
 

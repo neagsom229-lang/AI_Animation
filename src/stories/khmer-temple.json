@@ -6,10 +6,7 @@
   "language": "km",
   "subtitleLanguage": "km",
   "world": "khmer-temple",
-  "characters": [
-    { "id": "reach", "name": "បុត្រា រាជ", "role": "ជាងចម្លាក់", "vrmUrl": "public/models/characters/Vivi.vrm", "vrmScale": 1.22 },
-    { "id": "minea", "name": "នាង មីនា", "role": "អ្នកស្រាវជ្រាវ", "vrmUrl": "public/models/characters/Vita.vrm", "vrmScale": 1 }
-  ],
+  "characters": ["reach", "minea"],
   "scenes": [
     {
       "id": "k0",

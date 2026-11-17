@@ -40,6 +40,12 @@ test('make.mjs parseArgs rejects unknown arguments', () => {
   assert.throws(() => parseArgs(['--bogus']), /Unknown or incomplete argument/);
 });
 
+test('make.mjs parseArgs --storyboard sets storyboard mode', () => {
+  const args = parseArgs(['--storyboard']);
+  assert.equal(args.storyboard, true);
+  assert.equal(parseArgs([]).storyboard, false);
+});
+
 test('make.mjs parseArgs rejects an unknown language', () => {
   assert.throws(() => parseArgs(['--lang', 'xx']), /unknown/i);
 });

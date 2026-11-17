@@ -45,6 +45,7 @@ import {
   type VrmBoneName
 } from '../lib/vrm-anim.ts';
 import type { StoryAction } from '../lib/character-anim.ts';
+import { useReliefMaterial } from '../lib/relief.ts';
 
 // ---------------------------------------------------------------------------
 // Loader: one GLTFLoader with the VRM plugin registered exactly once.
@@ -101,6 +102,12 @@ export interface VrmCharacterProps {
   seed?: string;
   /** World-space point the eyes fixate on (listener head or camera). */
   gazeTarget?: [number, number, number];
+  /**
+   * Rendering style. `relief` replaces the model's own materials with the
+   * carved-sandstone material of the Angkor Wat bas-reliefs, so a
+   * mismatched (e.g. modern) figure reads as part of the monument.
+   */
+  style?: 'default' | 'relief';
 }
 
 export const VrmCharacter: React.FC<VrmCharacterProps> = ({
@@ -113,7 +120,8 @@ export const VrmCharacter: React.FC<VrmCharacterProps> = ({
   lineStartFrame = 0,
   mouthCues,
   seed = 'vrm',
-  gazeTarget
+  gazeTarget,
+  style = 'default'
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -122,6 +130,11 @@ export const VrmCharacter: React.FC<VrmCharacterProps> = ({
   // Suspends on first load; @remotion/three's SuspenseLoader turns that into
   // a delayRender so the frame is captured only after the model is in.
   const gltf = useLoader(vrmLoader, url);
+
+  // Round 5: the "relief" style replaces the model's own materials with the
+  // carved-sandstone material of the Angkor Wat bas-reliefs.
+  const reliefMaterial = useReliefMaterial({ color: '#9a9184', bumpScale: 1.4, repeat: [4, 4] });
+  const useRelief = style === 'relief';
 
   const vrm: VRM | null = React.useMemo(() => {
     const instance = (gltf.userData as { vrm?: VRM } | undefined)?.vrm ?? null;
@@ -140,11 +153,16 @@ export const VrmCharacter: React.FC<VrmCharacterProps> = ({
           mesh.receiveShadow = true;
           mesh.renderOrder = 1;
           mesh.frustumCulled = false;
+          if (useRelief) {
+            // One shared material for the whole figure — a stone relief is
+            // carved out of one block, not assembled from painted parts.
+            mesh.material = reliefMaterial;
+          }
         }
       });
     }
     return instance;
-  }, [gltf]);
+  }, [gltf, useRelief, reliefMaterial]);
 
   // World-space gaze target object (sibling of the character group: lookAt
   // reads its world position, so it must not inherit the character transform).

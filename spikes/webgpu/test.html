@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>WebGPU spike - Three.js WebGPURenderer in Remotion's Chrome</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "/three/build/three.module.js"
+  }
+}
+</script>
+</head>
+<body style="margin:0;background:#222;color:#eee;font:14px monospace">
+<canvas id="c" width="256" height="256"></canvas>
+<pre id="out"></pre>
+<script type="module">
+  // Result object the Node harness polls via page.evaluate().
+  window.__RESULT__ = { status: 'running', logs: [] };
+  const R = window.__RESULT__;
+  const log = (...a) => {
+    const line = a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ');
+    R.logs.push(line);
+    console.log('[webgpu-spike] ' + line);
+  };
+
+  try {
+    log('userAgent: ' + navigator.userAgent);
+    log('navigator.gpu type: ' + typeof navigator.gpu);
+    log('isSecureContext: ' + window.isSecureContext);
+
+    if (navigator.gpu) {
+      try {
+        const adapter = await navigator.gpu.requestAdapter();
+        log('navigator.gpu.requestAdapter(): ' + (adapter ? 'ADAPTER FOUND' : 'null (NO ADAPTER)'));
+        if (adapter) {
+          let info = adapter.info || null;
+          if (!info && typeof adapter.requestAdapterInfo === 'function') {
+            try { info = await adapter.requestAdapterInfo(); } catch (e) { log('requestAdapterInfo error: ' + e.message); }
+          }
+          log('adapter.info: ' + (info ? JSON.stringify({ vendor: info.vendor, architecture: info.architecture, device: info.device, description: info.description }) : 'n/a'));
+        }
+      } catch (e) {
+        log('requestAdapter() threw: ' + (e && e.message ? e.message : String(e)));
+      }
+    } else {
+      log('WebGPU is not supported: navigator.gpu is undefined');
+    }
+
+    const THREE = await import('three');
+    log('THREE.REVISION: ' + THREE.REVISION);
+
+    const { default: WebGPURenderer } = await import('/three/examples/jsm/renderers/webgpu/WebGPURenderer.js');
+    log('Imported WebGPURenderer from three/examples/jsm/renderers/webgpu/WebGPURenderer.js');
+
+    const canvas = document.getElementById('c');
+    const renderer = new WebGPURenderer({ canvas, antialias: false });
+    renderer.setSize(256, 256, false);
+    const backendKind = renderer.backend && renderer.backend.isWebGPUBackend
+      ? 'WebGPU'
+      : (renderer.backend && renderer.backend.isWebGLBackend ? 'WebGL2-fallback' : 'unknown');
+    log('selected backend: ' + backendKind);
+    R.backend = backendKind;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    camera.position.z = 3;
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 0x44aa88 })
+    );
+    scene.add(cube);
+
+    await renderer.init();
+    log('renderer.init() resolved');
+
+    for (let i = 0; i < 4; i++) {
+      cube.rotation.x = 0.3 + i * 0.2;
+      cube.rotation.y = 0.5 + i * 0.2;
+      await renderer.render(scene, camera);
+    }
+    log('rendered 4 frames; info.render.frame=' + renderer.info.render.frame +
+        ' calls=' + renderer.info.render.calls + ' triangles=' + renderer.info.render.triangles);
+    R.frames = renderer.info.render.frame;
+    R.calls = renderer.info.render.calls;
+    R.triangles = renderer.info.render.triangles;
+
+    R.status = 'SUCCESS';
+    log('RESULT: SUCCESS');
+  } catch (e) {
+    R.status = 'ERROR';
+    R.error = e && e.stack ? e.stack : String(e);
+    log('RESULT: ERROR - ' + (e && e.message ? e.message : String(e)));
+  }
+
+  document.getElementById('out').textContent = R.logs.join('\n');
+</script>
+</body>
+</html>

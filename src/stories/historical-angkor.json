@@ -4,10 +4,7 @@
   "theme": "Rise of water management and great temples",
   "tone": "epic",
   "language": "en",
-  "characters": [
-    { "id": "jaya", "name": "King Jayavarman VII", "role": "Builder King" },
-    { "id": "zhou", "name": "Zhou Daguan", "role": "Diplomatic Chronicler" }
-  ],
+  "characters": ["jaya", "zhou"],
   "scenes": [
     {
       "id": "s1",

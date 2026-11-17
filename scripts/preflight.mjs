@@ -58,6 +58,7 @@ const REMOTION_MARKER = 'remotion';
  * @property {number} freeMb
  * @property {boolean} lowMemory
  * @property {number} suggestedConcurrency
+ * @property {{pid: number, rssMb: number, name: string}[]} topProcesses
  * @property {ChromeProcess[]} staleChrome
  * @property {number} killed
  */
@@ -115,6 +116,56 @@ export function listChromeProcesses() {
         rssMb: Math.round(Number(m[2]) / 1024),
         commandLine: m[3]
       });
+    }
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The N biggest memory processes on the machine (the brief asks for the top 5
+ * when free RAM is low). Never throws — a platform that cannot answer returns
+ * an empty list, and the pre-flight must not be the reason a render fails.
+ *
+ * @param {number} [count]
+ * @returns {{pid: number, rssMb: number, name: string}[]}
+ */
+export function listTopMemoryProcesses(count = 5) {
+  try {
+    if (process.platform === 'win32') {
+      const script =
+        'Get-Process | Sort-Object WorkingSet64 -Descending | ' +
+        `Select-Object -First ${count} Name,Id,WorkingSet64 | ConvertTo-Json -Compress`;
+      const out = execFileSync('powershell.exe', ['-NoProfile', '-Command', script], {
+        encoding: 'utf8',
+        maxBuffer: 16 * 1024 * 1024
+      });
+      const parsed = JSON.parse(out.trim() || '[]');
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      return list
+        .filter((p) => p && p.Id)
+        .map((p) => ({
+          pid: Number(p.Id),
+          rssMb: Math.round(Number(p.WorkingSet64 || 0) / (1024 * 1024)),
+          name: String(p.Name || 'unknown')
+        }));
+    }
+    const out = execFileSync(
+      'ps',
+      ['-eo', 'pid=,rss=,comm=', '--sort=-rss'],
+      { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
+    );
+    const list = [];
+    for (const line of out.split('\n')) {
+      const m = line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/);
+      if (!m) continue;
+      list.push({
+        pid: Number(m[1]),
+        rssMb: Math.round(Number(m[2]) / 1024),
+        name: m[3]
+      });
+      if (list.length >= count) break;
     }
     return list;
   } catch {
@@ -200,6 +251,7 @@ export function runPreflight(options = {}) {
     freeMb,
     lowMemory: freeMb < minFreeMb,
     suggestedConcurrency: suggestConcurrency(freeMb),
+    topProcesses: listTopMemoryProcesses(5),
     staleChrome: stale,
     killed
   };
@@ -232,6 +284,12 @@ export function formatPreflight(report) {
     );
   } else {
     lines.push('[Preflight] No stale Remotion browser processes.');
+  }
+  if (report.lowMemory && report.topProcesses.length > 0) {
+    lines.push('[Preflight] Top memory processes:');
+    for (const p of report.topProcesses) {
+      lines.push(`[Preflight]   ${String(p.pid).padStart(7)}  ${String(p.rssMb).padStart(6)} MB  ${p.name}`);
+    }
   }
   return lines;
 }

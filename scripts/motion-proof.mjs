@@ -45,6 +45,7 @@ import {
   SPEAKER_YAW,
 } from '../remotion/lib/camera.ts';
 import { buildStoryTimeline } from '../remotion/lib/story-timing.ts';
+import { resolveCharacter } from '../src/characters/library.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -64,6 +65,7 @@ function parseArgs(argv) {
     count: 8,
     tag: 'shot',
     out: null,
+    debug: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -77,6 +79,7 @@ function parseArgs(argv) {
     else if (a === '--count' && argv[i + 1]) args.count = Number(argv[++i]);
     else if (a === '--tag' && argv[i + 1]) args.tag = argv[++i];
     else if (a === '--out' && argv[i + 1]) args.out = argv[++i];
+    else if (a === '--debug') args.debug = true;
     else throw new Error(`Unknown or incomplete argument: ${a}`);
   }
   if (!Number.isInteger(args.step) || args.step < 1) throw new Error('bad --step');
@@ -362,17 +365,18 @@ async function main() {
   const durationInFrames = scene.durationInFrames;
 
   // --- who speaks in this scene? ---
+  // story.characters is an array of IDs (Round 5 form); resolve through the library.
   const dialogue = sceneSpec.dialogue || [];
   const speakerId = dialogue[0] && dialogue[0].speaker;
-  const charSpec =
-    (speakerId && (story.characters || []).find((c) => c.id === speakerId)) ||
-    (story.characters || [])[0];
-  if (!charSpec) throw new Error('story has no characters');
+  const charId = speakerId || (story.characters || [])[0];
+  if (!charId) throw new Error('story has no characters');
+  const charSpec = resolveCharacter(charId);
+  if (!charSpec) throw new Error(`story references unknown character id "${charId}"`);
 
-  const vrmRel = charSpec.vrmUrl;
-  const hasListener = (story.characters || []).some((c) => c.id !== charSpec.id);
+  const vrmRel = charSpec.modelUrl || charSpec.vrmUrl;
+  const hasListener = (story.characters || []).some((c) => c !== charId);
   const yaw = hasListener ? SPEAKER_YAW : 0;
-  const vrmScale = typeof charSpec.vrmScale === 'number' ? charSpec.vrmScale : 1;
+  const vrmScale = typeof charSpec.scale === 'number' ? charSpec.scale : 1;
 
   // --- frame window ---
   const line = scene.lines[0];
@@ -568,9 +572,13 @@ async function main() {
       y0: Math.round(((box.y0 - crop.y0) * cellH) / (crop.y1 - crop.y0)),
       y1: Math.round(((box.y1 - crop.y0) * cellH) / (crop.y1 - crop.y0)),
     });
-    drawRect(scaled, cellW, sx(rows[i].boxes.head), [255, 60, 60]);
-    drawRect(scaled, cellW, sx(rows[i].boxes.torso), [60, 255, 90]);
-    for (const part of rows[i].parts.arm) drawRect(scaled, cellW, sx(part), [80, 150, 255]);
+    // Debug overlays (region boxes) are OFF by default — pass --debug to
+    // show them. The plain strip is the deliverable.
+    if (args.debug) {
+      drawRect(scaled, cellW, sx(rows[i].boxes.head), [255, 60, 60]);
+      drawRect(scaled, cellW, sx(rows[i].boxes.torso), [60, 255, 90]);
+      for (const part of rows[i].parts.arm) drawRect(scaled, cellW, sx(part), [80, 150, 255]);
+    }
     for (let y = 0; y < cellH; y += 1) {
       const srcStart = y * cellW * 4;
       const dstStart = (y * sheetW + i * cellW) * 4;
@@ -585,7 +593,11 @@ async function main() {
   console.log('');
   console.log(`  strip written: ${stripPath} (${sheetW}x${sheetH})`);
   console.log(`  frames written: ${stillPaths.map((p) => path.basename(p)).join(', ')}`);
-  console.log('  legend: red = head, green = torso, blue = arm');
+  console.log(
+    args.debug
+      ? '  legend: red = head, green = torso, blue = arm (debug overlays ON)'
+      : '  plain strip (no debug overlays); pass --debug to show region boxes'
+  );
 }
 
 function boxesUnion(list) {

@@ -16,6 +16,7 @@ import path from 'path';
 import { pathToFileURL } from 'node:url';
 import { renderStill, selectComposition } from '@remotion/renderer';
 import { getOrCreateBundle } from './lib/bundle-cache.mjs';
+import { validateCharacterLibrary } from '../src/characters/library.js';
 
 export function parseArgs(argv) {
   const args = {
@@ -48,6 +49,7 @@ export function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const story = JSON.parse(fs.readFileSync(args.story, 'utf-8'));
+  validateCharacterLibrary();
   // --voice lets QA render the same frame against an alternate envelope
   // (e.g. a zeroed copy) for a controlled mouth open/closed A/B test.
   const voicePath = path.resolve(args.voice);

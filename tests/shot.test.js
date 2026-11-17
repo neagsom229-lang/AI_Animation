@@ -28,6 +28,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   getShotPose,
+  shotFov,
   SHOT_SPECS,
   SPEAKER_POSITION,
   SPEAKER_YAW,
@@ -398,4 +399,58 @@ test('SUBTITLE_LAYOUT keeps captions inside the 5% title-safe area', () => {
     SUBTITLE_LAYOUT.lineHeight >= 1.4,
     'lineHeight must leave headroom for Khmer ascenders/descenders'
   );
+});
+
+test('close-up framing keeps the caption clear of the hands and face', () => {
+  // The caption box's highest possible top edge (worst case: two lines).
+  const lineH = SUBTITLE_LAYOUT.fontSizePx * SUBTITLE_LAYOUT.lineHeight;
+  const pad = 2 * SUBTITLE_LAYOUT.paddingYPx;
+  const captionTopPx = Math.min(
+    1080 - SUBTITLE_LAYOUT.bottomPx - (lineH + pad),
+    1080 - SUBTITLE_LAYOUT.bottomPx - (2 * lineH + pad)
+  );
+  // Project a world point to a screen Y (px) with the close-up's real fov.
+  const tanHalf = Math.tan((shotFov('close-up') / 2) * (Math.PI / 180));
+  const screenY = (pose, P) => {
+    const C = pose.position;
+    const T = pose.lookAt;
+    let d = [T[0] - C[0], T[1] - C[1], T[2] - C[2]];
+    const dl = Math.hypot(d[0], d[1], d[2]);
+    d = d.map((v) => v / dl);
+    let r = [-d[2], 0, d[0]];
+    const rl = Math.hypot(r[0], r[1], r[2]);
+    r = r.map((v) => v / rl);
+    const u = [
+      r[1] * d[2] - r[2] * d[1],
+      r[2] * d[0] - r[0] * d[2],
+      r[0] * d[1] - r[1] * d[0]
+    ];
+    const v = [P[0] - C[0], P[1] - C[1], P[2] - C[2]];
+    const z = v[0] * d[0] + v[1] * d[1] + v[2] * d[2];
+    const y = v[0] * u[0] + v[1] * u[1] + v[2] * u[2];
+    const ndcY = y / z / tanHalf;
+    return ((1 - ndcY) / 2) * 1080;
+  };
+  // The shipped character's hand line (hip height) and face line.
+  const HAND_PX = screenY(getShotPose('close-up', 'static', 0, FPS, DUR), [0, 0.9, 0]);
+  const FACE_PX = screenY(getShotPose('close-up', 'static', 0, FPS, DUR), [0, 1.45, 0]);
+  for (const rig of RIGS) {
+    for (let frame = 0; frame <= DUR; frame += 5) {
+      const pose = getShotPose('close-up', rig, frame, FPS, DUR);
+      const handPx = screenY(pose, [0, 0.9, 0]);
+      const facePx = screenY(pose, [0, 1.45, 0]);
+      assert.ok(
+        handPx < captionTopPx,
+        `close-up/${rig}@${frame}: hands at ${handPx.toFixed(0)}px overlap the ` +
+          `caption top (${captionTopPx.toFixed(0)}px)`
+      );
+      assert.ok(
+        facePx < captionTopPx,
+        `close-up/${rig}@${frame}: face at ${facePx.toFixed(0)}px overlaps the ` +
+          `caption top (${captionTopPx.toFixed(0)}px)`
+      );
+    }
+  }
+  // Sanity: the hand line really is below the face line (the projection works).
+  assert.ok(HAND_PX > FACE_PX, 'hands must project below the face');
 });

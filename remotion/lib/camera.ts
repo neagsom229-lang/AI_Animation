@@ -205,6 +205,13 @@ export const SPEAKER_POSITION: Vec3 = [0, 0, 0];
 export const LISTENER_POSITION: Vec3 = [-1.1, 0, 1.5];
 /** Head height of the shipped 1.8 m character: the talk-shot look-at. */
 export const HEAD_HEIGHT = 1.7;
+/**
+ * Close-up look-at height. Lower than HEAD_HEIGHT so the speaker's hands
+ * finish above the caption band (the bottom ~13% of the frame): a caption
+ * must never sit over the hands or face in a close-up. The pullback
+ * (`distance` 3.2 m) keeps the speaker inside the 40–60% framing band.
+ */
+export const CLOSEUP_TARGET_HEIGHT = 1.55;
 /** Yaw making the speaker face the listener (facing = (sin yaw, 0, cos yaw)). */
 export const SPEAKER_YAW = Math.atan2(
   LISTENER_POSITION[0] - SPEAKER_POSITION[0],
@@ -231,9 +238,11 @@ const OTS_DISTANCE = 3.86;
 
 export const SHOT_SPECS: Record<ShotType, ShotSpec> = {
   'close-up': {
-    distance: 2.5,
+    // Pulled back to 3.2 m and aimed at the upper chest (not the head) so the
+    // speaker's hands clear the caption band — see CLOSEUP_TARGET_HEIGHT.
+    distance: 3.2,
     height: 1.62,
-    target: [0, HEAD_HEIGHT, 0],
+    target: [0, CLOSEUP_TARGET_HEIGHT, 0],
     azimuth: 0,
     dollyStart: 1.1,
     arc: 0.3

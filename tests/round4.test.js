@@ -41,6 +41,9 @@ import {
   suggestConcurrency,
   staleRemotionChrome,
   freeMemoryMb,
+  listTopMemoryProcesses,
+  runPreflight,
+  formatPreflight,
   MIN_FREE_RAM_MB,
   DEFAULT_CONCURRENCY
 } from '../scripts/preflight.mjs';
@@ -325,4 +328,24 @@ test('the pre-flight reports the machine it is running on', () => {
   const free = freeMemoryMb();
   assert.ok(free > 0, 'free memory must be readable');
   assert.ok(MIN_FREE_RAM_MB === 4096, 'the warning threshold is 4 GB');
+});
+
+test('the pre-flight lists up to the 5 biggest memory processes when RAM is low', () => {
+  const top = listTopMemoryProcesses(5);
+  assert.ok(Array.isArray(top), 'top memory processes must be an array');
+  assert.ok(top.length <= 5, 'must return at most 5 processes');
+  for (const p of top) {
+    assert.ok(Number.isInteger(p.pid), `bad pid: ${p.pid}`);
+    assert.ok(Number.isFinite(p.rssMb) && p.rssMb >= 0, `bad rssMb: ${p.rssMb}`);
+    assert.ok(typeof p.name === 'string', `bad name: ${p.name}`);
+  }
+  // A low-memory report carries the list and prints it.
+  const report = runPreflight({ minFreeMb: Infinity });
+  assert.ok(report.lowMemory, 'an infinite threshold must always be low memory');
+  assert.ok(Array.isArray(report.topProcesses), 'report must carry topProcesses');
+  const lines = formatPreflight(report);
+  assert.ok(
+    lines.some((l) => l.includes('Top memory processes')),
+    'a low-memory report must list the top processes'
+  );
 });

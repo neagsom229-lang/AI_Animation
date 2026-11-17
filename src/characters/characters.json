@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "note": "Character library. Stories reference character IDs only (see src/core/story.js). The renderer resolves the id to this entry, so a character can be swapped (or re-costumed) without touching the story.",
+  "characters": [
+    {
+      "id": "reach",
+      "displayName": "បុត្រា រាជ",
+      "role": "អ្នកស្រាវជ្រាវ",
+      "modelUrl": "public/models/characters/Vivi.vrm",
+      "modelType": "vrm",
+      "faceRig": "visemes",
+      "heightM": 1.7,
+      "scale": 1.22,
+      "voice": "km-KH-PisethNeural",
+      "clipMap": {
+        "idle": "Idle",
+        "talk": "Idle",
+        "gesture": "Idle",
+        "walk": "Walk"
+      },
+      "costume": {
+        "variants": [
+          {
+            "id": "default",
+            "label": "Sampot and shoulder wrap",
+            "material": { "color": "#c8bfa2", "roughness": 0.95 }
+          }
+        ]
+      },
+      "era": "12th-century-khmer",
+      "style": "relief"
+    },
+    {
+      "id": "minea",
+      "displayName": "នាង មីនា",
+      "role": "អ្នកស្រាវជ្រាវ",
+      "modelUrl": "public/models/characters/Vita.vrm",
+      "modelType": "vrm",
+      "faceRig": "visemes",
+      "heightM": 1.66,
+      "scale": 1.0,
+      "voice": "km-KH-PisethNeural",
+      "clipMap": {
+        "idle": "Idle",
+        "talk": "Idle",
+        "gesture": "Idle",
+        "walk": "Walk"
+      },
+      "costume": {
+        "variants": [
+          {
+            "id": "default",
+            "label": "Field wrap",
+            "material": { "color": "#bfb696", "roughness": 0.95 }
+          }
+        ]
+      },
+      "era": "12th-century-khmer",
+      "style": "relief"
+    },
+    {
+      "id": "jaya",
+      "displayName": "King Jayavarman VII",
+      "role": "Builder King",
+      "modelUrl": null,
+      "modelType": "none",
+      "faceRig": "none",
+      "heightM": 1.75,
+      "scale": 1.0,
+      "voice": "en-US-AriaNeural",
+      "clipMap": {
+        "idle": "Idle",
+        "talk": "Idle",
+        "gesture": "Idle",
+        "walk": "Walk"
+      },
+      "costume": { "variants": [{ "id": "default", "label": "Royal regalia", "material": null }] },
+      "era": "12th-century-khmer",
+      "style": "default"
+    },
+    {
+      "id": "zhou",
+      "displayName": "Zhou Daguan",
+      "role": "Diplomatic Chronicler",
+      "modelUrl": null,
+      "modelType": "none",
+      "faceRig": "none",
+      "heightM": 1.72,
+      "scale": 1.0,
+      "voice": "en-US-AriaNeural",
+      "clipMap": {
+        "idle": "Idle",
+        "talk": "Idle",
+        "gesture": "Idle",
+        "walk": "Walk"
+      },
+      "costume": { "variants": [{ "id": "default", "label": "Song dynasty robe", "material": null }] },
+      "era": "12th-century-khmer",
+      "style": "default"
+    },
+    {
+      "id": "narrator",
+      "displayName": "Narrator",
+      "role": "Voice",
+      "modelUrl": null,
+      "modelType": "none",
+      "faceRig": "none",
+      "heightM": 1.7,
+      "scale": 1.0,
+      "voice": "en-US-AriaNeural",
+      "clipMap": {
+        "idle": "Idle",
+        "talk": "Idle",
+        "gesture": "Idle",
+        "walk": "Walk"
+      },
+      "costume": { "variants": [{ "id": "default", "label": "Voice only", "material": null }] },
+      "era": "any",
+      "style": "default"
+    },
+    {
+      "id": "hero",
+      "displayName": "Explorer Alex",
+      "role": "Protagonist",
+      "modelUrl": "public/models/characters/casual_male.glb",
+      "modelType": "glb",
+      "faceRig": "jaw",
+      "heightM": 1.8,
+      "scale": 0.55,
+      "voice": "en-US-AriaNeural",
+      "clipMap": {
+        "idle": "Idle",
+        "talk": "Idle",
+        "gesture": "Idle",
+        "walk": "Walk"
+      },
+      "costume": {
+        "variants": [
+          {
+            "id": "default",
+            "label": "Tunic and trousers",
+            "material": { "color": "#d4c5a8", "roughness": 0.9 }
+          }
+        ]
+      },
+      "era": "generic-historical",
+      "style": "default"
+    },
+    {
+      "id": "flora",
+      "displayName": "Flora",
+      "role": "Botanist",
+      "modelUrl": null,
+      "modelType": "none",
+      "faceRig": "none",
+      "heightM": 1.6,
+      "scale": 1.0,
+      "voice": "en-US-AriaNeural",
+      "clipMap": {
+        "idle": "Idle",
+        "talk": "Idle",
+        "gesture": "Idle",
+        "walk": "Walk"
+      },
+      "costume": { "variants": [{ "id": "default", "label": "Field clothes", "material": null }] },
+      "era": "any",
+      "style": "default"
+    },
+    {
+      "id": "helios",
+      "displayName": "Helios",
+      "role": "Sun Ray",
+      "modelUrl": null,
+      "modelType": "none",
+      "faceRig": "none",
+      "heightM": 1.7,
+      "scale": 1.0,
+      "voice": "en-US-AriaNeural",
+      "clipMap": {
+        "idle": "Idle",
+        "talk": "Idle",
+        "gesture": "Idle",
+        "walk": "Walk"
+      },
+      "costume": { "variants": [{ "id": "default", "label": "Golden robe", "material": null }] },
+      "era": "any",
+      "style": "default"
+    }
+  ]
+}

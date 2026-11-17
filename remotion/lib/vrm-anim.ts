@@ -190,11 +190,11 @@ export function breathWave(frame: number, fps: number, seed: string): number {
 }
 
 /**
- * Subtle head-sway euler (radians) for a frame: three incommensurate seeded
- * sines, each bounded by `MAX_SWAY_RAD` (≈1.3°) so the head is never still
- * but never wobbles.
+ * Head-sway euler (radians) for a frame: three incommensurate seeded sines,
+ * each bounded by `MAX_SWAY_RAD` (≈2°) so the head is never still but never
+ * wobbles.
  */
-export const MAX_SWAY_RAD = 0.022;
+export const MAX_SWAY_RAD = 0.035;
 
 export function headSway(frame: number, fps: number, seed: string): Euler3 {
   if (!Number.isFinite(frame) || !Number.isFinite(fps) || fps <= 0) {
@@ -547,10 +547,11 @@ export function bodyPose(input: BodyPoseInput): BodyPose {
   // 1) Always-on micro-motion.
   const pose: BodyPose = {
     ...IDLE_POSE,
-    chest: { x: -0.016 * (breath - 0.5) * 2, y: 0, z: 0 },
+    // Breathing lifts the chest (readable at 24–30 fps).
+    chest: { x: -0.05 * (breath - 0.5) * 2, y: 0, z: 0 },
     head: { x: sway.x, y: sway.y, z: sway.z },
-    spine: { x: 0, y: 0.012 * Math.sin(2 * Math.PI * 0.11 * t + seeded(`torso:${seed}`, 'p')), z: 0 },
-    hips: { x: 0, y: 0, z: 0.01 * Math.sin(2 * Math.PI * 0.07 * t + seeded(`hips:${seed}`, 'p')) },
+    spine: { x: 0, y: 0.025 * Math.sin(2 * Math.PI * 0.11 * t + seeded(`torso:${seed}`, 'p')), z: 0 },
+    hips: { x: 0, y: 0, z: 0.02 * Math.sin(2 * Math.PI * 0.07 * t + seeded(`hips:${seed}`, 'p')) },
   };
 
   const add = (bone: VrmBoneName, delta: Partial<Euler3>) => {
@@ -622,11 +623,11 @@ export function bodyPose(input: BodyPoseInput): BodyPose {
       const wrist: VrmBoneName = peak.side === 'right' ? 'rightHand' : 'leftHand';
       const shoulder: VrmBoneName = peak.side === 'right' ? 'rightShoulder' : 'leftShoulder';
       const amt = peak.amount * fade;
-      add(lower, { y: -0.34 * sign * amt, z: 0.26 * amt, x: -0.16 * amt });
-      add(wrist, { y: 0.42 * sign * amt, x: 0.16 * amt });
-      add(shoulder, { z: -0.07 * sign * amt });
-      add('chest', { y: 0.06 * sign * amt });
-      add('head', { y: 0.04 * sign * amt });
+      add(lower, { y: -0.48 * sign * amt, z: 0.34 * amt, x: -0.20 * amt });
+      add(wrist, { y: 0.55 * sign * amt, x: 0.20 * amt });
+      add(shoulder, { z: -0.09 * sign * amt });
+      add('chest', { y: 0.09 * sign * amt });
+      add('head', { y: 0.05 * sign * amt });
     }
   }
 
@@ -634,12 +635,12 @@ export function bodyPose(input: BodyPoseInput): BodyPose {
   //    onto the supporting foot, the spine and chest counter-rotate above
   //    it, and the free knee softens. This is the layer that stops the
   //    figure reading as a mannequin between gestures.
-  add('hips', { z: 0.055 * shift, y: 0.02 * shift });
-  add('spine', { y: 0.035 * shift, z: -0.022 * shift });
-  add('chest', { y: -0.055 * shift, z: 0.018 * shift });
-  add('head', { y: -0.018 * shift });
-  add('leftLowerLeg', { x: 0.05 * Math.max(0, shift) });
-  add('rightLowerLeg', { x: 0.05 * Math.max(0, -shift) });
+  add('hips', { z: 0.10 * shift, y: 0.035 * shift });
+  add('spine', { y: 0.07 * shift, z: -0.04 * shift });
+  add('chest', { y: -0.10 * shift, z: 0.03 * shift });
+  add('head', { y: -0.03 * shift });
+  add('leftLowerLeg', { x: 0.08 * Math.max(0, shift) });
+  add('rightLowerLeg', { x: 0.08 * Math.max(0, -shift) });
 
   return pose;
 }

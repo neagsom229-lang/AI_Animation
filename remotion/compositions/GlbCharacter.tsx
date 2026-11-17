@@ -52,6 +52,7 @@ import {
 } from '../lib/character-anim.ts';
 import { plantFoot } from '../lib/foot-plant.ts';
 import { weightShift } from '../lib/vrm-anim.ts';
+import { useReliefMaterial } from '../lib/relief.ts';
 
 /** Per-instance cloned rig + the bones the lip-sync gesture drives. */
 interface Rig {
@@ -98,6 +99,14 @@ export interface GlbCharacterProps {
   lineStartFrame?: number;
   /** Per-character seed so two speakers do not mirror each other. */
   seed?: string;
+  /**
+   * Rendering style. `relief` replaces the model's own materials with the
+   * carved-sandstone material of the Angkor Wat bas-reliefs, so a
+   * mismatched (e.g. modern) figure reads as part of the monument.
+   */
+  style?: 'default' | 'relief';
+  /** Clip names per action, from the character library. */
+  clipMap?: Record<string, string>;
 }
 
 export const GlbCharacter: React.FC<GlbCharacterProps> = ({
@@ -108,7 +117,9 @@ export const GlbCharacter: React.FC<GlbCharacterProps> = ({
   action = 'idle',
   env,
   lineStartFrame = 0,
-  seed = 'glb'
+  seed = 'glb',
+  style = 'default',
+  clipMap
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -117,6 +128,11 @@ export const GlbCharacter: React.FC<GlbCharacterProps> = ({
   // Suspends on first load; @remotion/three's SuspenseLoader turns that into
   // a delayRender so the frame is captured only after the model is in.
   const gltf = useLoader(GLTFLoader, url);
+
+  // Round 5: the "relief" style replaces the model's own materials with the
+  // carved-sandstone material of the Angkor Wat bas-reliefs.
+  const reliefMaterial = useReliefMaterial({ color: '#9a9184', bumpScale: 1.4, repeat: [4, 4] });
+  const useRelief = style === 'relief';
 
   // ------------------------------------------------------------------
   // Clone once per instance: SkeletonUtils.clone keeps skinned skeletons
@@ -151,6 +167,11 @@ export const GlbCharacter: React.FC<GlbCharacterProps> = ({
         // Bind-pose bounding boxes are stale once the mixer animates the
         // mesh — disable culling so limbs never pop out mid-shot.
         mesh.frustumCulled = false;
+        if (useRelief) {
+          // One shared material for the whole figure — a stone relief is
+          // carved out of one block, not assembled from painted parts.
+          mesh.material = reliefMaterial;
+        }
         // Mouth morph targets (Mixamo "mouthSmile"/viseme packs, ARKit,
         // MPFB) — record the viseme slots so the lip-sync can drive them.
         const dict = (mesh as THREE.Mesh & { morphTargetDictionary?: Record<string, number> })
@@ -197,7 +218,7 @@ export const GlbCharacter: React.FC<GlbCharacterProps> = ({
       rightUpperLeg,
       morphMeshes
     };
-  }, [gltf]);
+  }, [gltf, useRelief, reliefMaterial]);
 
   // ------------------------------------------------------------------
   // Mixer + actions: created once per rig. Idle is the base clip (it is
@@ -220,8 +241,16 @@ export const GlbCharacter: React.FC<GlbCharacterProps> = ({
       action.setEffectiveWeight(0);
       extras.set(clip.name, action);
     }
-    return { mixer, idle, extras, names };
-  }, [rig]);
+    // Round 5: the character library's clipMap names the clip for each
+    // action; fall back to the built-in preference list when the library
+    // has no entry (or names a clip the model does not ship).
+    const wanted = clipMap && clipMap[action];
+    const resolved =
+      wanted && names.some((n) => n.toLowerCase() === wanted.toLowerCase())
+        ? names.find((n) => n.toLowerCase() === wanted.toLowerCase())!
+        : resolveClip(names, action);
+    return { mixer, idle, extras, names, resolved };
+  }, [rig, clipMap, action]);
 
   // ------------------------------------------------------------------
   // Drive the rig — all state is a pure function of the current frame.
@@ -236,7 +265,7 @@ export const GlbCharacter: React.FC<GlbCharacterProps> = ({
     // set. The fallback pack has only Idle + Walk, so the others resolve to
     // nothing and the weights stay on the legacy path.
     const rich = clipWeights(action, frame, fps);
-    const talkClip = resolveClip(anim.names, 'talk');
+    const talkClip = anim.resolved;
     const talkAction = talkClip ? anim.extras.get(talkClip) : undefined;
     if (talkAction && talkClip !== 'Walk') {
       talkAction.setEffectiveWeight(Math.max(0, rich.talk - (weights.walk > 0 ? 1 : 0)));

@@ -11,8 +11,7 @@
       "role": "Protagonist",
       "modelUrl": "public/models/characters/casual_male.glb"
     }
-  ],
-  "scenes": [
+  ],  "scenes": [
     {
       "id": "scene1",
       "name": "Quiet Awakening",

@@ -6,6 +6,7 @@
 'use strict';
 
 import { MoodLightingPresets } from '../render/moods.js';
+import { indexCharacters, loadCharacterLibrary } from '../characters/library.js';
 
 /**
  * @typedef {Object} Character
@@ -21,7 +22,6 @@ import { MoodLightingPresets } from '../render/moods.js';
  * @property {string} text
  * @property {string} [subtitle]
  */
-
 /**
  * @typedef {Object} Scene
  * @property {string} id
@@ -61,10 +61,17 @@ export function knownMoods() {
 /**
  * Validates a story object against the required schema.
  * Throws an Error with an exact, actionable message on the first violation.
+ *
+ * Round 5: a story references characters by ID only (the character library
+ * in `src/characters/characters.json` owns the models, faces, heights and
+ * clips). The legacy inline form (`{id, name, role}`) is still accepted for
+ * stories that need a character the library does not know.
+ *
  * @param {Story} story
+ * @param {object} [opts] `{library}` — a pre-loaded character library
  * @returns {boolean} true if valid
  */
-export function validateStory(story) {
+export function validateStory(story, opts = {}) {
   if (!story || typeof story !== 'object') {
     throw new Error('Story must be a non-null object.');
   }
@@ -83,15 +90,49 @@ export function validateStory(story) {
   if (!Array.isArray(story.characters) || story.characters.length === 0) {
     throw new Error('Story must have at least one character in characters array.');
   }
+  // The library is part of the repo, so it is loaded by default; a caller
+  // may pass a pre-loaded one. If it cannot be read at all, the id checks
+  // are skipped (the offline fallback templates are validated without it).
+  let libraryIndex = null;
+  if (opts.library) {
+    libraryIndex = indexCharacters(opts.library);
+  } else {
+    try {
+      libraryIndex = indexCharacters(loadCharacterLibrary());
+    } catch {
+      libraryIndex = null;
+    }
+  }
   for (const [idx, char] of story.characters.entries()) {
-    if (!char.id || !char.name) {
+    if (typeof char === 'string') {
+      // Round 5 form: a character ID, resolved against the library.
+      if (!char.trim()) {
+        throw new Error(`Character at index ${idx} is an empty id.`);
+      }
+      if (libraryIndex && !libraryIndex.has(char)) {
+        throw new Error(
+          `Character id "${char}" is not in the character library. ` +
+            `Known characters: ${[...libraryIndex.keys()].join(', ')}.`
+        );
+      }
+      continue;
+    }
+    if (!char || !char.id || !char.name) {
       throw new Error(`Character at index ${idx} missing id or name.`);
+    }
+    if (libraryIndex && !libraryIndex.has(char.id)) {
+      throw new Error(
+        `Character id "${char.id}" is not in the character library. ` +
+          `Known characters: ${[...libraryIndex.keys()].join(', ')}.`
+      );
     }
   }
   if (!Array.isArray(story.scenes) || story.scenes.length === 0) {
     throw new Error('Story must have at least one scene in scenes array.');
   }
-  const characterIds = new Set(story.characters.map((c) => c.id));
+  const characterIds = new Set(
+    story.characters.map((c) => (typeof c === 'string' ? c : c.id))
+  );
   for (const [idx, scene] of story.scenes.entries()) {
     if (!scene.id || !scene.name || typeof scene.dur !== 'number' || scene.dur <= 0) {
       throw new Error(`Scene at index ${idx} missing id, name, or valid positive dur.`);
@@ -117,15 +158,22 @@ export function validateStory(story) {
       // A character is 3D-capable with EITHER a GLB (`modelUrl`, the
       // primary Mixamo/GLB path) or a VRM (`vrmUrl`, the fallback) —
       // Round 4 made the GLB primary but the VRM still renders in 3D.
-      const modelled = story.characters.filter(
-        (c) =>
+      // Round 5: the models live in the character library, so the cast is
+      // resolved through it.
+      const modelled = story.characters.filter((c) => {
+        if (typeof c === 'string') {
+          const entry = libraryIndex ? libraryIndex.get(c) : null;
+          return Boolean(entry && entry.modelType !== 'none');
+        }
+        return (
           (typeof c.modelUrl === 'string' && c.modelUrl.trim().length > 0) ||
           (typeof c.vrmUrl === 'string' && c.vrmUrl.trim().length > 0)
-      );
+        );
+      });
       if (modelled.length < 2) {
         throw new Error(
           `Scene "${scene.id}" uses shot "over-shoulder", which needs a second 3D character ` +
-          `to look over — only ${modelled.length} character(s) declare modelUrl or vrmUrl.`
+          `to look over — only ${modelled.length} character(s) have a 3D model.`
         );
       }
     }

@@ -43,6 +43,7 @@ import { pathToFileURL } from 'node:url';
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer';
 import { getOrCreateBundle } from './lib/bundle-cache.mjs';
 import { validateStory, KNOWN_LANGUAGES } from '../src/core/story.js';
+import { validateCharacterLibrary } from '../src/characters/library.js';
 import { buildSrt } from './lib/srt.mjs';
 import { resolveBrowser } from './lib/browser.mjs';
 import {
@@ -70,6 +71,7 @@ export function parseArgs(argv) {
     gpu: true,
     software: false,
     draft: false,
+    storyboard: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -80,6 +82,7 @@ export function parseArgs(argv) {
     else if (a === '--gpu') { args.gpu = true; args.software = false; }
     else if (a === '--software') { args.software = true; args.gpu = false; }
     else if (a === '--draft') { args.draft = true; }
+    else if (a === '--storyboard') { args.storyboard = true; }
     else { throw new Error(`Unknown or incomplete argument: ${a}`); }
   }
   if (!KNOWN_LANGUAGES.includes(args.lang)) {
@@ -100,7 +103,11 @@ async function main() {
 
   // Validate the story BEFORE spending any time on TTS/render.
   const story = JSON.parse(fs.readFileSync(storyPath, 'utf-8'));
-  validateStory(story);
+  // The character library is validated first: a broken library entry must
+  // fail loudly before any network call.
+  const library = validateCharacterLibrary();
+  console.log(`[Assert] Character library OK (${library.characters.length} characters).`);
+  validateStory(story, { library });
   console.log('[Assert] Story schema validation passed.');
 
   try {
@@ -154,6 +161,19 @@ async function main() {
     }
   }
   console.log('[Assert] Voice generation assertions passed successfully.');
+
+  // --storyboard: low-res stills + voice animatic for approval. Reuses the
+  // voice generated above, then exits before any 1080p render (Round 5).
+  if (args.storyboard) {
+    const { runStoryboard } = await import('./storyboard.mjs');
+    const storyName = path.basename(storyPath, '.json');
+    await runStoryboard({
+      story: storyPath,
+      voice: 'public/voice.json',
+      out: path.join('./out', `${storyName}-storyboard`),
+    });
+    return;
+  }
 
   const inputProps = { story, voiceData, isMock: mock, isDraft: args.draft };
 
