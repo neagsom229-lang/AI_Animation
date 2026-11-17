@@ -5,10 +5,12 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mapFilenames, missingScenes } from './film-map.mjs';
 import { hashInputs } from './film-graph.mjs';
 import { isUpscaled, sourceResolutionGate } from './image-check.mjs';
+import { imageToGray32, perceptualHash } from './film-duplicates.mjs';
 
 /** Probe an image with Remotion ffprobe (returns width/height/pix_fmt). */
 export function probeImage(file) {
@@ -74,6 +76,7 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
   const warningsByScene = {};
   const sourceByScene = {};
   const resolutionByScene = {};
+  const hashByScene = {};
   for (const m of result.mapped) {
     if (only && only !== m.scene) continue;
     const src = path.join(inbox, m.file);
@@ -83,6 +86,11 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
     const warns = qualityWarnings(q, cfg);
     if (warns.length) warningsByScene[m.scene] = warns;
     sourceByScene[m.scene] = { sourceWidth: q.width, sourceHeight: q.height, upscaled: isUpscaled(q.width, cfg.resolutions.master[0]) };
+    // Perceptual hash of the SOURCE image (exact SHA-256 is written by intake on the normalized copy).
+    try {
+      hashByScene[m.scene] = { sourceSha256: crypto.createHash('sha256').update(fs.readFileSync(src)).digest('hex'),
+        phash: perceptualHash(imageToGray32(src)) };
+    } catch { /* phash is advisory; status recomputes from normalized images */ }
     const gate = sourceResolutionGate(q.width, cfg.quality.minSourceWidth, { draft: args.draft });
     resolutionByScene[m.scene] = gate;
     if (gate.warning) {
@@ -120,6 +128,9 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
         e.sourceHeight = src.sourceHeight;
       }
       e.upscaled = prevUpscaled || src.upscaled === true;
+      const h = hashByScene[e.scene] || {};
+      if (h.sourceSha256) e.sourceSha256 = h.sourceSha256;
+      if (h.phash) e.phash = h.phash;
       e.watermarkCheck = false; // required checklist item: check tool terms
       e.matchesNarration = false; // required checklist item: content check (item 3)
       e.qualityWarnings = warningsByScene[e.scene] || [];
