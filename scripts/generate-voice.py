@@ -55,6 +55,38 @@ async def generate_edge_tts(text, voice, out_path, rate=None):
     await communicate.save(out_path)
 
 
+def alternate_voices(voice):
+    """Alternate Khmer voices to try when the primary returns no audio."""
+    alts = {"km-KH-PisethNeural": ["km-KH-SreymomNeural"],
+            "km-KH-SreymomNeural": ["km-KH-PisethNeural"]}
+    return alts.get(voice, [])
+
+
+def generate_edge_with_retry(text, voice, out_path, rate=None, attempts=8):
+    """Retry edge-tts with logged alternate voices; return the voice actually used.
+
+    edge-tts intermittently returns 'No audio was received' for Khmer lines.
+    We retry the primary then the alternate voice, logging every failure loudly
+    (never silent), and record which voice succeeded in voice.json.
+    """
+    import time
+    candidates = [voice] + alternate_voices(voice)
+    last = None
+    for attempt in range(attempts):
+        for v in candidates:
+            try:
+                asyncio.run(generate_edge_tts(text, v, out_path, rate))
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                    if v != voice:
+                        print(f"[WARN] edge-tts primary '{voice}' returned no audio; used '{v}' (logged, not silent).")
+                    return v
+            except Exception as e:
+                last = e
+                print(f"[WARN] edge-tts attempt {attempt + 1} voice '{v}' failed: {str(e)[:100]}")
+        time.sleep(0.5 * (attempt + 1))
+    raise last or RuntimeError("edge-tts returned no audio for all attempts")
+
+
 async def generate_azure_tts(text, voice, out_path, rate=None):
     """Azure Cognitive Services Speech (official SDK), key from env only.
 
@@ -312,6 +344,7 @@ def main():
         scene_total_dur = 0.0
 
         for line_idx, dlg in enumerate(dialogue_list):
+            used_voice = voice
             text = dlg.get("text", "")
             subtitle = dlg.get("subtitle", text)
             # Pronunciation substitution applies to spoken audio only.
@@ -361,12 +394,13 @@ def main():
                         wav_file.writeframes(struct.pack('<h', sample))
                 os.replace(tmp_path, audio_path)
             else:
+                used_voice = voice
                 try:
                     tmp_path = audio_path + ".tmp"
                     if args.tts == "azure":
                         asyncio.run(generate_azure_tts(spoken, voice, tmp_path, args.rate))
                     else:
-                        asyncio.run(generate_edge_tts(spoken, voice, tmp_path, args.rate))
+                        used_voice = generate_edge_with_retry(spoken, voice, tmp_path, args.rate)
                     os.replace(tmp_path, audio_path)
                 except Exception as e:
                     print(f"[Error] {provider} generation failed for '{spoken}': {e}")
@@ -381,6 +415,7 @@ def main():
                 "subtitle": subtitle,
                 "env": env,
                 "silent": bool(dlg.get("silent")),
+                "voiceUsed": used_voice,
             })
             scene_total_dur += exact_dur
 
