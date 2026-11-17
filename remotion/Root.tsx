@@ -10,6 +10,7 @@ import { KuanimationScene } from './compositions/KuanimationScene';
 import type { KuanimationSceneProps } from './compositions/KuanimationScene';
 import { Scene10s } from './compositions/Scene10s';
 import { StoryFilm, calculateStoryMetadata } from './compositions/StoryFilm';
+import { IllustratedFilm, calculateIllustratedMetadata } from './compositions/IllustratedFilm';
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -51,6 +52,16 @@ export const RemotionRoot: React.FC = () => {
         id="StoryFilm"
         component={StoryFilm}
         calculateMetadata={calculateStoryMetadata}
+        fps={30}
+        width={1920}
+        height={1080}
+      />
+
+      {/* Illustrated 2.5D film driven by story JSON + voice JSON (Round: illustrated). */}
+      <Composition
+        id="IllustratedFilm"
+        component={IllustratedFilm}
+        calculateMetadata={calculateIllustratedMetadata}
         fps={30}
         width={1920}
         height={1080}

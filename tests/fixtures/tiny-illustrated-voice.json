@@ -1,0 +1,37 @@
+{
+  "story": "tests/fixtures/tiny-illustrated-story.json",
+  "title": "Tiny Illustrated",
+  "language": "km",
+  "voice": "km-KH-PisethNeural",
+  "provider": "mock",
+  "scenes": [
+    {
+      "id": "sc-a",
+      "name": "First scene",
+      "dur": 1.0,
+      "lines": [
+        {
+          "file": "fixtures/tiny-silence.mp3",
+          "dur": 1.0,
+          "text": "ទីមួយ។",
+          "subtitle": "First scene.",
+          "env": [0, 0.5, 1, 0.5, 0]
+        }
+      ]
+    },
+    {
+      "id": "sc-b",
+      "name": "Second scene",
+      "dur": 1.0,
+      "lines": [
+        {
+          "file": "fixtures/tiny-silence.mp3",
+          "dur": 1.0,
+          "text": "ទីពីរ។",
+          "subtitle": "Second scene.",
+          "env": [0, 0.5, 1, 0.5, 0]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "id": "tiny-illustrated",
+  "style": "illustrated",
+  "title": "Tiny Illustrated",
+  "titleKm": "តូច",
+  "language": "km",
+  "subtitleLanguage": "km",
+  "scenes": [
+    {
+      "id": "sc-a",
+      "years": null,
+      "yearChip": "802",
+      "narration": { "en": "First scene.", "km": "ទីមួយ។" },
+      "image": "assets-src/illustrations/tiny.png",
+      "clip": null,
+      "camera": "push-in",
+      "fx": ["dust", "grain"],
+      "transition": "crossfade"
+    },
+    {
+      "id": "sc-b",
+      "years": null,
+      "yearChip": null,
+      "narration": { "en": "Second scene.", "km": "ទីពីរ។" },
+      "image": "assets-src/illustrations/tiny.png",
+      "clip": null,
+      "camera": "truck-right",
+      "fx": ["god-rays"],
+      "transition": "dip-to-black"
+    }
+  ]
+}

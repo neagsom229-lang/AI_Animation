@@ -61,7 +61,7 @@ function parseArgs(argv) {
 
 async function resolveFrames(composition, args) {
   if (args.frames) return args.frames;
-  if (args.composition === 'StoryFilm') {
+  if (args.composition === 'StoryFilm' || args.composition === 'IllustratedFilm') {
     // Frames 0, middle, last.
     const last = Math.max(0, composition.durationInFrames - 1);
     const mid = Math.floor(last / 2);
@@ -76,6 +76,21 @@ async function getStoryFilmInputProps() {
   return { story, voiceData };
 }
 
+async function getIllustratedFilmInputProps() {
+  const story = JSON.parse(readFileSync(path.join(ROOT, 'tests', 'fixtures', 'tiny-illustrated-story.json'), 'utf8'));
+  const voiceData = JSON.parse(readFileSync(path.join(ROOT, 'tests', 'fixtures', 'tiny-illustrated-voice.json'), 'utf8'));
+  // Mark every fixture image/depth as present (committed tiny fixtures).
+  const assetStatus = {};
+  for (const scene of story.scenes) assetStatus[scene.id] = { image: true, depth: true, clip: false };
+  return { story, voiceData, assetStatus, allowMissing: false };
+}
+
+function inputPropsFor(composition) {
+  if (composition === 'StoryFilm') return getStoryFilmInputProps();
+  if (composition === 'IllustratedFilm') return getIllustratedFilmInputProps();
+  return Promise.resolve(undefined);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   mkdirSync(OUT_DIR, { recursive: true });
@@ -84,10 +99,14 @@ async function main() {
   const chromeBefore = snapshotChromePids();
 
   console.log('[1/5] Bundling Remotion project...');
-  const serveUrl = await bundle({ entryPoint: ENTRY_POINT, onProgress: () => {} });
+  const serveUrl = await bundle({
+    entryPoint: ENTRY_POINT,
+    publicDir: path.join(ROOT, 'public'),
+    onProgress: () => {},
+  });
 
   console.log(`[2/5] Selecting composition "${args.composition}"...`);
-  const inputProps = args.composition === 'StoryFilm' ? await getStoryFilmInputProps() : undefined;
+  const inputProps = await inputPropsFor(args.composition);
   const composition = await selectComposition({
     serveUrl,
     id: args.composition,
