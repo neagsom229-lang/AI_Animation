@@ -239,29 +239,66 @@ def depth_edge_metric(depth_path, threshold=SOBEL_THRESHOLD):
     return depth_statistics(depth_path, threshold)["edgeMetric"]
 
 
-def rank_limit_factors(sharp_values):
-    """Round 11: derive per-scene limitFactor from sharpness RANK within story.
+def rank_limit_factors(sharp_values, signatures=None):
+    """Round 11 (+ Round 12 tie fix): derive limitFactor from sharpness rank.
 
-    Sharpest 25% of scenes -> factor in [0.6, 0.8] (linear, sharpest = 0.6).
-    Remaining 75%             -> factor in [0.9, 1.0] (linear, least sharp = 1.0).
-    Clamped to [0.4, 1.0]. Returns a list of factors in the SAME order as input.
+    Ties MUST receive the same factor: scenes are grouped when they have an
+    identical sharpness signature (sobelP95 + sharpFraction) OR an identical
+    image hash. Grouping uses union-find so either criterion merges a class.
+    The whole class receives the factor of its sharpest member's rank, so no
+    two identical scenes can drift apart (e.g. sc-15/16/17 in the real metrics).
+
+    Sharpest 25% -> factor in [0.6, 0.8]; remaining -> [0.9, 1.0]; clamp [0.4,1].
+    Returns factors in the SAME order as input. Pure.
     """
     n = len(sharp_values)
     if n == 0:
         return []
-    order = sorted(range(n), key=lambda i: sharp_values[i], reverse=True)  # sharpest first
-    factors = [1.0] * n
+
+    # Union-find over scenes.
+    parent = list(range(n))
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    # Merge by image hash when signatures carry one (signature = (metric_key, hash)).
+    by_hash = {}
+    by_metric = {}
+    for i, sig in enumerate(signatures if signatures is not None else [None] * n):
+        metric_key = sig[0] if sig is not None else sharp_values[i]
+        img_hash = sig[1] if sig is not None and len(sig) > 1 else None
+        by_metric.setdefault(metric_key, []).append(i)
+        if img_hash:
+            by_hash.setdefault(img_hash, []).append(i)
+    for group in list(by_metric.values()) + list(by_hash.values()):
+        for i in group[1:]:
+            union(group[0], i)
+
+    # Representative sharpness per class = max (sharpest member).
+    class_sharp = {}
+    for i in range(n):
+        r = find(i)
+        class_sharp[r] = max(class_sharp.get(r, float('-inf')), sharp_values[i])
+
+    # Rank the CLASSES by representative sharpness (sharpest first).
+    roots_sorted = sorted(class_sharp, key=lambda r: class_sharp[r], reverse=True)
     top = max(1, int(round(n * 0.25)))
-    for rank, idx in enumerate(order):
+    root_factor = {}
+    for rank, root in enumerate(roots_sorted):
         if rank < top:
-            # sharpest -> 0.6, least-sharp of the top quartile -> 0.8
             f = 0.6 + 0.2 * (rank / max(1, top - 1)) if top > 1 else 0.6
         else:
-            # first of the rest -> 0.9, least sharp -> 1.0
-            r2 = (rank - top) / max(1, n - top - 1)
+            r2 = (rank - top) / max(1, len(roots_sorted) - top - 1)
             f = 0.9 + 0.1 * r2
-        factors[idx] = round(min(1.0, max(0.4, f)), 4)
-    return factors
+        root_factor[root] = round(min(1.0, max(0.4, f)), 4)
+
+    return [root_factor[find(i)] for i in range(n)]
 
 
 def sha256_file(path):
@@ -469,9 +506,12 @@ def main():
             "note": "sobelP95=p95(|Sobel| on depth 0..1); sharpFraction=frac(|Sobel|>0.02); limit=rank(sharpness): sharpest25%->0.6-0.8 rest->0.9-1.0 clamp[0.4,1]",
         })
 
-    # Round 11 item 1: rank-based limit factors from sharpness (sobelP95).
+    # Round 11 item 1 (+ Round 12 tie fix): rank factors with tie grouping.
     sharp_values = [s["sobelP95"] for s in metrics["scenes"]]
-    factors = rank_limit_factors(sharp_values)
+    # Signature ties: identical (sobelP95, sharpFraction) OR identical image hash.
+    signatures = [((s["sobelP95"], s["sharpFraction"]), s["imageSha256"])
+                  for s in metrics["scenes"]]
+    factors = rank_limit_factors(sharp_values, signatures)
     for s, f in zip(metrics["scenes"], factors):
         s["limitFactor"] = f
 
