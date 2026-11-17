@@ -144,7 +144,8 @@ export async function main(argv = process.argv.slice(2)) {
         code = await cmdStatus({ cfg, args, graph });
         break;
       case 'ingest':
-        code = await ingest({ cfg, args, graph, data, force: args.force, only: args.only, verbose: args.verbose });
+        await ingest({ cfg, args, graph, data, force: args.force, only: args.only, verbose: args.verbose });
+        code = 0;
         break;
       case 'depth':
         runCmd('python', ['scripts/depth.py', '--story', cfg.story, '--depth', cfg.depth.mode, ...(args.allowMissing ? ['--allow-missing'] : [])],
@@ -158,7 +159,8 @@ export async function main(argv = process.argv.slice(2)) {
           { verbose: args.verbose, label: 'voice', fix: 'Check network/edge-tts; run node scripts/doctor.mjs' });
         break;
       case 'preview':
-        code = await preview({ cfg, args, graph, data, force: args.force, only: args.only });
+        await preview({ cfg, args, graph, data, force: args.force, only: args.only });
+        code = 0;
         break;
       case 'render':
         runCmd('node', ['scripts/make.mjs', '--story', cfg.story, '--style', 'illustrated',

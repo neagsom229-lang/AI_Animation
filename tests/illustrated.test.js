@@ -56,8 +56,13 @@ test('illustrated story validator: rejects missing narration / bad fields', () =
 
 // --- 2. Missing-file failures ---------------------------------------------
 test('asset manifest: fails loudly by default, reports with --allow-missing', () => {
-  assert.throws(() => checkIllustratedAssets(story), /Missing \d+ illustrated asset/);
-  const report = checkIllustratedAssets(story, { allowMissing: true });
+  // Use a story with a deliberately nonexistent image so this test is
+  // independent of whether real assets have been ingested.
+  const fake = JSON.parse(JSON.stringify(story));
+  const illIdx = fake.scenes.findIndex((s) => !(s.media && s.media.type === 'world3d'));
+  fake.scenes[illIdx].image = 'assets-src/illustrations/__definitely_missing__.png';
+  assert.throws(() => checkIllustratedAssets(fake), /Missing \d+ illustrated asset/);
+  const report = checkIllustratedAssets(fake, { allowMissing: true });
   assert.equal(report.allowMissing, true);
   assert.equal(report.scenes.length, 18);
   assert.ok(report.missing > 0);

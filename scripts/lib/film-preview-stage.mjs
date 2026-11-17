@@ -56,6 +56,18 @@ export async function preview({ cfg, args, graph, data, force, only }) {
   }
   graph.log(`preview: ${realCount}/${story.scenes.length} real images present; others are badged placeholders`);
 
+  // Stage real assets into public/illustrated/ so staticFile() can serve them.
+  // (Mirrors make-illustrated's stageAssets, not a rewrite of the renderer.)
+  const { publicAssetPath } = await import('../../remotion/lib/illustrated-assets.ts');
+  for (const spec of story.scenes) {
+    for (const rel of [spec.image, spec.image ? `${spec.image.replace(/\.[^.]+$/, '')}-depth${path.extname(spec.image)}` : null]) {
+      if (!rel || !fs.existsSync(path.resolve(root, rel))) continue;
+      const dest = path.resolve(root, 'public', publicAssetPath(rel));
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(path.resolve(root, rel), dest);
+    }
+  }
+
   const inputHash = requireCurrentInputHash(root, cfg, story.scenes);
   const sheet = path.join(previewDir, `${data.storyName}-contact.png`);
   if (!force && !isSheetStale(sheet, inputHash)) {
