@@ -34,12 +34,18 @@ test('estimate scales total for 1080p', () => {
 });
 
 test('baselines carry provenance (not fabricated)', () => {
-  assert.ok(MEASURED_MS_PER_FRAME.illustration.source.includes('MEASUREMENTS.md'));
-  assert.ok(MEASURED_MS_PER_FRAME.world3d.source.includes('MEASUREMENTS.md'));
+  assert.ok(MEASURED_MS_PER_FRAME.illustration.source.includes('out/drafts/2026-11-18T03-58-14-790Z/report.json'));
+  assert.ok(MEASURED_MS_PER_FRAME.world3d.source.includes('out/drafts/2026-11-18T03-58-14-790Z/report.json'));
 });
 
-test('Round 12 item 5: illustration baseline re-baselined to ~55-60 ms/frame', () => {
-  assert.ok(MEASURED_MS_PER_FRAME.illustration.ms720 >= 55 && MEASURED_MS_PER_FRAME.illustration.ms720 <= 60,
-    `illustration baseline ${MEASURED_MS_PER_FRAME.illustration.ms720} must be 55-60`);
-  assert.ok(MEASURED_MS_PER_FRAME.illustration.source.includes('Round 11'), 'source must cite the latest measurements');
+test('Round 15 item 7: illustration baseline re-baselined to ~62 ms/frame', () => {
+  assert.ok(MEASURED_MS_PER_FRAME.illustration.ms720 >= 60 && MEASURED_MS_PER_FRAME.illustration.ms720 <= 65,
+    `illustration baseline ${MEASURED_MS_PER_FRAME.illustration.ms720} must be ~62`);
+  assert.ok(MEASURED_MS_PER_FRAME.illustration.source.includes('Round 15'), 'source must cite the latest measurements');
+  assert.ok(MEASURED_MS_PER_FRAME.world3d.ms720 >= 440 && MEASURED_MS_PER_FRAME.world3d.ms720 <= 570);
+});
+
+test('cold start is separate, not folded into scene ms/frame', async () => {
+  const m = await import('../scripts/film-estimate.mjs');
+  assert.match(m.COLD_START_NOTE, /EXCLUDED from these baselines/);
 });

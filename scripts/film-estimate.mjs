@@ -18,13 +18,17 @@ import { buildIllustratedTimeline } from '../remotion/lib/illustrated-timing.ts'
 
 const ROOT = process.cwd();
 
-/** Measured baselines with provenance. */
+/** Cold start is a one-off, NEVER charged to scene 1 or a per-scene average. */
+export const COLD_START_NOTE = 'Cold start (setup + Remotion bundle) is reported separately by film draft timingBreakdown; scene 1 of the older full-draft report was 1369.2 ms/frame because of that cold start and is EXCLUDED from these baselines.';
+
+/** Measured baselines with provenance (Round 15 re-baseline). */
 export const MEASURED_MS_PER_FRAME = {
-  // Round 12 item 5: re-baselined from the LATEST illustration measurements
-  // (Round 11 scenes 2=59.8 and 15=54.8 ms/frame at 1280x720, real renders).
-  // The old 223 figure came from an early run with a heavier code path.
-  illustration: { ms720: 57, source: 'out/review/draft-frames/MEASUREMENTS.md (Round 11: sc-02=59.8, sc-15=54.8; mean 57)' },
-  world3d: { ms720: 600, source: 'out/review/draft-frames/MEASUREMENTS.md (scenes 1/7, 646/552, midpoint 600)' },
+  // Round 15 item 7: latest real full draft out/drafts/2026-11-18T03-58-14-790Z/report.json.
+  // Painted scenes (14, excluding world3d 1/7/13/18) mean 65.4, median 66.1 ms/frame;
+  // trimmed/warm value used here ~62. Scene 1=1369.2 is a cold start, excluded.
+  illustration: { ms720: 62, source: 'out/drafts/2026-11-18T03-58-14-790Z/report.json (Round 15: painted mean 65.4, median 66.1, trimmed ~62; cold scene 1 excluded)' },
+  // Same report: sc-07=439.8, sc-13=572.0, sc-18=486.4 ms/frame (mean 499.4).
+  world3d: { ms720: 500, source: 'out/drafts/2026-11-18T03-58-14-790Z/report.json (Round 15: world3d 439.8/572.0/486.4, mean 499.4, range 440-570; cold scene 1 excluded)' },
   clip: { ms720: 40, source: 'cost.msPerFrame.clip in film.config.json (placeholder, unverified)' },
 };
 
@@ -75,6 +79,7 @@ export function main(argv = process.argv.slice(2)) {
   const timeline = buildIllustratedTimeline(voiceData, cfg.fps);
 
   console.log('film estimate — PREDICTION from measured ms/frame (not a measurement):');
+  console.log(`COLD START (separate, one-off): ${COLD_START_NOTE}`);
   for (const [k, v] of Object.entries(MEASURED_MS_PER_FRAME)) {
     console.log(`  ${k}: ${v.ms720} ms/frame @720p — ${v.source}`);
   }
@@ -90,6 +95,8 @@ export function main(argv = process.argv.slice(2)) {
     console.log(`TOTAL predicted: ${e.totalSeconds}s (${(e.totalSeconds / 60).toFixed(1)} min)`);
     console.log('SLOWEST 5: ' + e.slowest.map((r) => `${r.scene}=${r.seconds}s`).join(', '));
   }
+  const master = results['1080p master'];
+  console.log(`\nEXPECTED FINAL RENDER (1920x1080): ${master.totalSeconds}s (${(master.totalSeconds / 60).toFixed(1)} min) — PREDICTION, excludes the one-off cold start.`);
   return 0;
 }
 
