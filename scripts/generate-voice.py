@@ -62,29 +62,45 @@ def alternate_voices(voice):
     return alts.get(voice, [])
 
 
-def generate_edge_with_retry(text, voice, out_path, rate=None, attempts=8):
-    """Retry edge-tts with logged alternate voices; return the voice actually used.
+def generate_edge_with_retry(text, voice, out_path, rate=None, attempts=3,
+                             allow_fallback=False, scene_id='?'):
+    """Retry the PINNED voice 3 times with backoff; fallback only when allowed.
 
-    edge-tts intermittently returns 'No audio was received' for Khmer lines.
-    We retry the primary then the alternate voice, logging every failure loudly
-    (never silent), and record which voice succeeded in voice.json.
+    Default: never switch narrator. After 3 failed primary attempts, STOP with a
+    clear error. With allow_fallback=True only, try the documented alternate
+    voices once each and log every scene that used one.
     """
     import time
-    candidates = [voice] + alternate_voices(voice)
     last = None
     for attempt in range(attempts):
-        for v in candidates:
-            try:
-                asyncio.run(generate_edge_tts(text, v, out_path, rate))
-                if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-                    if v != voice:
-                        print(f"[WARN] edge-tts primary '{voice}' returned no audio; used '{v}' (logged, not silent).")
-                    return v
-            except Exception as e:
-                last = e
-                print(f"[WARN] edge-tts attempt {attempt + 1} voice '{v}' failed: {str(e)[:100]}")
-        time.sleep(0.5 * (attempt + 1))
-    raise last or RuntimeError("edge-tts returned no audio for all attempts")
+        try:
+            asyncio.run(generate_edge_tts(text, voice, out_path, rate))
+            if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                return voice
+            last = RuntimeError('edge-tts returned no audio')
+        except Exception as e:
+            last = e
+        print(f"[WARN] scene {scene_id}: edge-tts '{voice}' attempt {attempt + 1}/{attempts} failed: {str(last)[:100]}")
+        if attempt + 1 < attempts:
+            time.sleep(0.5 * (2 ** attempt))  # 0.5s, 1s backoff
+
+    if not allow_fallback:
+        raise RuntimeError(
+            f"scene {scene_id}: pinned voice '{voice}' failed {attempts} times ({last}). "
+            "STOPPING — narrator would change silently. Re-run with --allow-fallback "
+            "only if you accept a different voice; the scene will be logged."
+        )
+
+    for alt in alternate_voices(voice):
+        try:
+            asyncio.run(generate_edge_tts(text, alt, out_path, rate))
+            if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                print(f"[FALLBACK] scene {scene_id}: pinned '{voice}' unavailable; used '{alt}' (EXPLICIT --allow-fallback).")
+                return alt
+        except Exception as e:
+            last = e
+            print(f"[WARN] scene {scene_id}: fallback voice '{alt}' failed: {str(e)[:100]}")
+    raise last or RuntimeError(f"scene {scene_id}: no voice produced audio")
 
 
 async def generate_azure_tts(text, voice, out_path, rate=None):
@@ -272,6 +288,8 @@ def main():
     parser.add_argument('--out', default='public/voice')
     parser.add_argument('--json', default='public/voice.json',
                         help='Where to write the voice.json data file')
+    parser.add_argument('--allow-fallback', action='store_true',
+                        help='Permit a DIFFERENT narrator voice after 3 failed primary attempts (logged per scene)')
     parser.add_argument('--doctor', action='store_true', help='Run doctor check and exit')
     args = parser.parse_args()
 
@@ -311,8 +329,11 @@ def main():
         "title": story.get("title", ""),
         "language": lang,
         "voice": voice,
+        "voiceId": voice,          # pinned narrator, never silently changed
         "provider": provider,
         "rate": args.rate,
+        "allowFallback": bool(args.allow_fallback),
+        "fallbackScenes": [],
         "scenes": []
     }
 
@@ -400,13 +421,21 @@ def main():
                     if args.tts == "azure":
                         asyncio.run(generate_azure_tts(spoken, voice, tmp_path, args.rate))
                     else:
-                        used_voice = generate_edge_with_retry(spoken, voice, tmp_path, args.rate)
+                        used_voice = generate_edge_with_retry(
+                            spoken, voice, tmp_path, args.rate,
+                            allow_fallback=args.allow_fallback, scene_id=scene_id)
                     os.replace(tmp_path, audio_path)
                 except Exception as e:
                     print(f"[Error] {provider} generation failed for '{spoken}': {e}")
                     sys.exit(1)
 
             exact_dur, env = process_audio_file(audio_path, is_mock=args.mock)
+
+            if used_voice != voice:
+                voice_data["fallbackScenes"].append({
+                    "scene": scene_id, "id": scene_id,
+                    "requested": voice, "used": used_voice,
+                })
 
             scene_lines.append({
                 "file": rel_path,
@@ -423,6 +452,9 @@ def main():
             "id": scene_id,
             "name": scene.get("name", ""),
             "dur": round(scene_total_dur, 3),
+            "duration": round(scene_total_dur, 3),
+            "voiceId": voice,
+            "rate": args.rate,
             "lines": scene_lines
         })
 

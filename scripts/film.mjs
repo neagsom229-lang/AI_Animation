@@ -33,7 +33,7 @@ const COMMANDS = ['setup', 'status', 'next', 'doctor', 'estimate', 'ingest', 're
 
 /** Parse CLI args. Throws on unknown command/flag with exact usage. */
 export function parseArgs(argv) {
-  const a = { command: null, story: null, only: null, force: false, draft: false, strict: false, verbose: false, allowMissing: false, depthMode: null, profile: null };
+  const a = { command: null, story: null, only: null, force: false, draft: false, strict: false, verbose: false, allowMissing: false, allowFallback: false, depthMode: null, profile: null };
   const rest = [...argv];
   if (rest.length && !rest[0].startsWith('-')) a.command = rest.shift();
   // `film review` owns its own flags (sheet / --scene / --license-url); pass the
@@ -75,6 +75,7 @@ export function parseArgs(argv) {
     else if (x === '--strict') a.strict = true;
     else if (x === '--verbose') a.verbose = true;
     else if (x === '--allow-missing') a.allowMissing = true;
+    else if (x === '--allow-fallback') a.allowFallback = true;
     else if (x === '--depth' && rest[i + 1]) {
       a.depthMode = rest[++i];
       if (!['model', 'gradient'].includes(a.depthMode)) throw new Error('--depth must be model or gradient');
@@ -233,11 +234,14 @@ export async function main(argv = process.argv.slice(2)) {
       case 'voice': {
         const vp = voicePython(ROOT);
         if (vp.warning) graph.log(`voice: WARN ${vp.warning}`);
+        const voiceStarted = Date.now();
         runCmd(vp.cmd, [...vp.prefix, 'scripts/generate-voice.py', '--story', cfg.story, '--lang', 'km',
           '--voice', cfg.tts.voice, '--tts', cfg.tts.provider, '--rate', String(cfg.tts.rate),
           '--out', `public/voice/${data.storyName}`, '--json', `public/voice-${data.storyName}.json`,
+          ...(args.allowFallback ? ['--allow-fallback'] : []),
           ...(args.draft ? ['--mock'] : [])],
           { verbose: args.verbose, label: 'voice', fix: 'Check network/edge-tts; run node scripts/film.mjs setup' });
+        graph.log(`voice: pinned=${cfg.tts.voice} rate=${cfg.tts.rate} elapsed=${Date.now() - voiceStarted} ms fallbackAllowed=${args.allowFallback}`);
         break;
       }
       case 'preview':
