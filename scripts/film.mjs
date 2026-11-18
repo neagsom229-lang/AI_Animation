@@ -29,7 +29,7 @@ import { profileForCommand, PROFILE_FINAL } from './lib/film-profile.mjs';
 import { writeStatusFile } from './lib/film-report.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const COMMANDS = ['setup', 'status', 'next', 'doctor', 'estimate', 'ingest', 'review', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
+const COMMANDS = ['setup', 'status', 'next', 'doctor', 'estimate', 'ingest', 'review', 'upscale', 'depth', 'voice', 'preview', 'draft', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
 
 /** Parse CLI args. Throws on unknown command/flag with exact usage. */
 export function parseArgs(argv) {
@@ -40,6 +40,11 @@ export function parseArgs(argv) {
   // remainder through unchanged so both CLIs stay single-purpose.
   if (a.command === 'review') {
     a.reviewArgv = rest;
+    return a;
+  }
+  // `film draft` owns --scenes/--all/--out-dir; pass through unchanged.
+  if (a.command === 'draft') {
+    a.draftArgv = rest;
     return a;
   }
   for (let i = 0; i < rest.length; i += 1) {
@@ -234,6 +239,11 @@ export async function main(argv = process.argv.slice(2)) {
         await preview({ cfg, args, graph, data, force: args.force, only: args.only });
         code = 0;
         break;
+      case 'draft': {
+        const { main: draftMain } = await import('./film-draft.mjs');
+        code = await draftMain(args.draftArgv || []);
+        break;
+      }
       case 'render': {
         const isFinal = profile === PROFILE_FINAL;
         runCmd('node', ['scripts/make.mjs', '--story', cfg.story, '--style', 'illustrated',

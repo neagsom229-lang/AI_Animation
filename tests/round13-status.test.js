@@ -123,7 +123,7 @@ function gate(name, fix = '', detail = 'detail') {
 test('film next: no blockers -> exactly one render action for the current profile', () => {
   const draft = nextActionFor([], { profile: 'draft' });
   assert.equal(draft.blockers, 0);
-  assert.equal(draft.action, 'node scripts/film.mjs render');
+  assert.equal(draft.action, 'node scripts/film.mjs draft');
   const final = nextActionFor([], { profile: 'final' });
   assert.equal(final.action, 'node scripts/film.mjs render --profile final');
 });
@@ -146,7 +146,7 @@ test('film next: each gate maps to its exact fix command', () => {
     [gate('resolution'), 'node scripts/film.mjs upscale --scene 4'],
     [gate('depth'), 'node scripts/film.mjs depth --depth gradient'],
     [gate('parallax-metrics'), 'node scripts/film.mjs depth --depth gradient'],
-    [gate('draft-render'), 'node scripts/film.mjs render'],
+    [gate('draft-render'), 'node scripts/film.mjs draft --scenes 2,7,15'],
   ];
   const context = { lowScenes: [4, 5] };
   for (const [g, expected] of cases) {
@@ -194,7 +194,7 @@ test('START_HERE.md gives the five plain commands and the safety rules', () => {
     'node scripts/film.mjs ingest',
     'node scripts/film.mjs depth',
     'node scripts/film.mjs next',
-    'node scripts/film.mjs render',
+    'node scripts/film.mjs draft',
   ]) assert.ok(md.includes(cmd), `missing command: ${cmd}`);
   assert.match(md, /DRAFT - NOT RELEASABLE/);
   assert.match(md, /2\.5D/);

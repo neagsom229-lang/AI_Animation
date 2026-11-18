@@ -87,10 +87,10 @@ export function nextActionFor(gates, { profile = 'draft', context = {} } = {}) {
     return {
       blockers: 0,
       gate: null,
-      action: final ? 'node scripts/film.mjs render --profile final' : 'node scripts/film.mjs render',
+      action: final ? 'node scripts/film.mjs render --profile final' : 'node scripts/film.mjs draft',
       why: final
         ? 'every final gate passes — render the final film'
-        : 'no blockers for the draft profile — render a draft and watch it',
+        : 'no blockers for the draft profile — render a 720p draft and watch it',
     };
   }
   const gate = blockers[0];
@@ -146,7 +146,7 @@ export function nextActionFor(gates, { profile = 'draft', context = {} } = {}) {
       why = gate.detail;
       break;
     case 'draft-render':
-      action = 'node scripts/film.mjs render';
+      action = 'node scripts/film.mjs draft --scenes 2,7,15';
       why = gate.detail;
       break;
     default:

@@ -16,7 +16,7 @@ node scripts/film.mjs depth
 node scripts/film.mjs next
 
 # 5. Render a draft (720p) and watch it — the file says DRAFT - NOT RELEASABLE
-node scripts/film.mjs render
+node scripts/film.mjs draft
 ```
 
 ## Before you go further

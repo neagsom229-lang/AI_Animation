@@ -124,10 +124,10 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final', 
   // 6) parallax metrics present with real fields.
   const metricsPath = path.resolve(ROOT, 'out/review/parallax-metrics.json');
   const addDraftRenderGate = () => {
-    const draftScript = fs.existsSync(path.resolve(ROOT, 'scripts/film-render-select.mjs'));
+    const draftScript = fs.existsSync(path.resolve(ROOT, 'scripts/film-draft.mjs'));
     add('draft-render', draftScript ? 'PASS' : 'BLOCK',
-      draftScript ? 'script available (run: node scripts/film-render-select.mjs --scenes 1,4,7)' : 'missing',
-      'node scripts/film-render-select.mjs --scenes 1,4,7');
+      draftScript ? 'script available (run: node scripts/film.mjs draft --scenes 2,7,15)' : 'missing',
+      'node scripts/film.mjs draft --scenes 2,7,15');
   };
   if (!fs.existsSync(metricsPath)) {
     add('parallax-metrics', 'BLOCK', 'no parallax-metrics.json', 'node scripts/film.mjs depth --depth gradient');
