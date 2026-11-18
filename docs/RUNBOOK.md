@@ -3,16 +3,19 @@
 ## Film factory (one CLI — preferred)
 
 ```powershell
-node scripts/film.mjs status              # dashboard + wrong-folder + cost + verdict
+node scripts/film.mjs setup               # create/repair the ONE Python env
+node scripts/film.mjs status              # dashboard + STATUS.md (generated) + verdict
+node scripts/film.mjs next                # exactly ONE action + blocker count
 node scripts/film.mjs status --strict     # exit 1 if not releasable
-node scripts/film.mjs ingest --force      # copy inbox images -> normalized + manifest (force = provisional license)
+node scripts/film.mjs ingest              # copy inbox images -> normalized + manifest (draft = provisional license)
 node scripts/film.mjs review sheet        # build out/review/review.html (image + narration + hash + flags)
 node scripts/film.mjs review --scene 3 --matches-narration yes --watermark clear --reviewed yes
 node scripts/film.mjs review --license-url https://tool.example/terms
 node scripts/film.mjs depth               # depth.py (gradient if model unavailable)
 node scripts/film.mjs voice               # edge-tts narration
 node scripts/film.mjs preview             # contact sheet + animatic from REAL images
-node scripts/film.mjs render --draft      # scene-cached render, resume from build/state.json
+node scripts/film.mjs draft               # 720p DRAFT-NOT-RELEASABLE: --scenes 2,7,15 | --all
+node scripts/film.mjs render              # full render (draft by default; --profile final for release)
 node scripts/film.mjs publish             # stamped publish pack in out/publish/<story>/
 node scripts/film.mjs qa                  # 9 gates
 node scripts/film.mjs all --draft         # whole chain
@@ -21,6 +24,10 @@ node scripts/film.mjs clean               # remove build/ (regenerable)
 ```
 
 Flags: `--story <path> --only scene=N --profile draft|final --force --draft --strict --verbose --allow-missing`.
+`film draft --scenes 2,7,15` (default) or `--all` renders selected scenes into
+`out/drafts/<timestamp>/khmer-empire-DRAFT-NOT-RELEASABLE.mp4` with 3 stills per
+scene (`early/mid/late`), a contact sheet, `report.json` (ms/frame, duration,
+size, ffprobe, estimate comparison) and `honesty.txt` (what cannot be judged).
 Ingest/doctor cache ffprobe + perceptual hashes in `build/cache/probe-cache.json`
 keyed by (path, mtime, size) with the sha256 stored; a second run over unchanged
 images does no probe work and prints the measured speedup.
@@ -56,6 +63,8 @@ manifest.json). QA sheets: `out/review/`.
 - `out/` is gitignored; deleting it forces a cold render.
 
 ## Verification
+- `npm test` is strictly OFFLINE; live edge-tts tests are under `tests/network/`
+  and run only with `npm run test:network` (they fail loudly if offline).
 - `npm run qa` runs all gates (see package.json).
 - `node scripts/verify-determinism.mjs --composition StoryFilm`
 - `node scripts/verify-determinism.mjs --composition IllustratedFilm`

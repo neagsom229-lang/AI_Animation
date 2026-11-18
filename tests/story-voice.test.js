@@ -1,9 +1,10 @@
 /**
  * @fileoverview Phase 1 voice-data contract tests.
  *
- * These tests run the voice generator FRESHLY (never on stored files):
+ * These OFFLINE tests run the voice generator FRESHLY (never on stored files):
  *   - mock mode: exercises the full decode/envelope pipeline offline.
- *   - real mode: makes one live edge-tts call (network required; fails loudly).
+ * The one live edge-tts test lives in tests/network/ and runs only via
+ * `npm run test:network`; npm test must never need the network.
  *
  * Contract per line (Phase 1):
  *   abs(len(env) - ceil(dur*20)) <= 2, unique values > 10, max === 1,
@@ -20,7 +21,7 @@ import assert from 'node:assert';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { checkVoiceContract } from './check-voice-data.mjs';
 
 function freshOutDir(tag) {
@@ -59,33 +60,8 @@ test('mock generation (fresh run) satisfies the Phase 1 voice contract', () => {
   }
 });
 
-test('real edge-tts generation (fresh run, network) satisfies the Phase 1 voice contract', () => {
-  const outDir = freshOutDir('real');
-  const voiceData = runGenerator(['--lang', 'km', '--voice', 'km-KH-PisethNeural'], outDir);
-
-  assert.equal(voiceData.provider, 'edge-tts');
-  const violations = checkVoiceContract(voiceData, outDir);
-  assert.deepEqual(violations, [], 'real data must satisfy the contract');
-
-  for (const scene of voiceData.scenes) {
-    for (const line of scene.lines) {
-      assert.ok(!line.file.includes('mock'), 'real files must never carry the mock prefix');
-      assert.ok(line.file.endsWith('.mp3'), 'edge-tts outputs MP3; real voice files must be .mp3');
-
-      // ffprobe must agree with voice.json dur (ffprobe prints seconds with 2 decimals).
-      // ffprobe writes its report to stderr, so capture both streams.
-      const full = path.resolve(outDir, line.file);
-      const probe = execSync(`npx remotion ffprobe "${full}" 2>&1`, { encoding: 'utf8' });
-      const match = probe.match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/);
-      assert.ok(match, `ffprobe output missing Duration for ${line.file}`);
-      const probeDur = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
-      assert.ok(
-        Math.abs(probeDur - line.dur) <= 0.05,
-        `ffprobe duration ${probeDur}s must match voice.json dur ${line.dur}s for ${line.file}`
-      );
-    }
-  }
-});
+// Live network test moved to tests/network/story-voice-network.test.js.
+// Run it explicitly with `npm run test:network` (npm test stays offline).
 
 test('contract checker FAILS on the reported bug shape: 102 env samples for a 7.632s line', () => {
   // Exactly the shape reported for the time-compression bug:

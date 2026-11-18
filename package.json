@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",
+    "test:network": "node scripts/test-network.mjs",
     "remotion:studio": "remotion studio",
     "remotion:render:test": "remotion render DeterminismTest out/determinism-test.mp4",
     "verify:determinism": "node scripts/verify-determinism.mjs",
