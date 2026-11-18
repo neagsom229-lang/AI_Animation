@@ -47,6 +47,62 @@ export function qualityWarnings({ width, height, pixFmt }, cfg) {
   return w;
 }
 
+/** List candidate images in a drop folder (never recurses, skips _originals). */
+export function listDropImages(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter((f) => /\.(png|jpe?g)$/i.test(f) && !f.startsWith('_')).sort();
+}
+
+/**
+ * Round 13 item 2: ONE drop folder. Inbox only; if it is empty, fall back to
+ * the legacy build/ingest/<story> staging path with a deprecation warning.
+ * @returns {{dir: string, files: string[], deprecated: boolean}}
+ */
+export function resolveDropFolder({ root, inbox, staging, storyName }) {
+  const inboxFiles = listDropImages(inbox);
+  if (inboxFiles.length > 0) return { dir: path.resolve(inbox), files: inboxFiles, deprecated: false };
+  // Legacy staging path (pre-Round-13). Read-only fallback, never the default.
+  const legacy = path.join(path.resolve(root, 'build', 'ingest'), storyName);
+  const legacyFiles = listDropImages(legacy);
+  if (legacyFiles.length > 0) {
+    return { dir: legacy, files: legacyFiles, deprecated: true };
+  }
+  return { dir: path.resolve(inbox), files: [], deprecated: false };
+}
+
+/** Timestamped backup folder name (filesystem-safe). */
+export function backupDirName(ts = new Date()) {
+  return String(ts.toISOString()).replace(/[:.]/g, '-');
+}
+
+/**
+ * Copy (never move/delete) every normalized file that ingest is about to
+ * replace into assets-src/backup/<timestamp>/.
+ * @returns {{dir: string, files: string[]}}
+ */
+export function backupReplaced({ root, cfg, mappedScenes }) {
+  const stamp = backupDirName();
+  const dir = path.join(path.resolve(root, 'assets-src', 'backup'), stamp);
+  const files = [];
+  for (const scene of mappedScenes) {
+    const dest = path.resolve(root, cfg.paths.illustrations, targetDestName(scene));
+    if (!fs.existsSync(dest)) continue;
+    fs.mkdirSync(dir, { recursive: true });
+    const copy = path.join(dir, path.basename(dest));
+    fs.copyFileSync(dest, copy);
+    files.push(path.basename(dest));
+  }
+  return { dir, files };
+}
+
+function targetDestName(sceneNo) {
+  return `scene-${String(sceneNo).padStart(2, '0')}.png`;
+}
+
+function fileSha(file) {
+  try { return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch { return null; }
+}
+
 /** The ingest stage runner. */
 export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
   const root = process.cwd();
@@ -75,7 +131,12 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
 
   const mapPath = path.join(inbox, 'map.json');
   const mapObject = fs.existsSync(mapPath) ? JSON.parse(fs.readFileSync(mapPath, 'utf8')) : {};
-  const files = fs.readdirSync(inbox).filter((f) => /\.(png|jpe?g)$/i.test(f) && !f.startsWith('_'));
+  const drop = resolveDropFolder({ root, inbox, staging, storyName: data.storyName });
+  if (drop.deprecated) {
+    graph.log(`  DEPRECATED: ${cfg.paths.inbox}/ has no images — reading the legacy staging path ${path.relative(root, drop.dir)}/.`);
+    graph.log(`  FIX: copy the images into ${cfg.paths.inbox}/ (the one drop folder). Nothing is moved or deleted.`);
+  }
+  const files = drop.files;
   const result = mapFilenames(files, mapObject, data.story.scenes.length);
   graph.log(`ingest: ${files.length} inbox file(s) -> ${result.mapped.length} scenes, ${result.unmapped.length} unmapped, ${Object.keys(result.duplicates).length} duplicate scene(s)`);
 
@@ -88,6 +149,17 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
   const missing = missingScenes(result.mapped, data.story.scenes.length);
   if (missing.length) graph.log(`  MISSING scenes: ${missing.join(', ')}`);
 
+  // Round 13 item 2: copy every file that ingest is about to replace into a
+  // timestamped backup BEFORE any write. Never move, never delete.
+  const processedScenes = result.mapped.filter((m) => !only || only === m.scene).map((m) => m.scene);
+  const beforeHashes = new Map();
+  for (const scene of processedScenes) {
+    const dest = path.resolve(root, cfg.paths.illustrations, targetDestName(scene));
+    beforeHashes.set(scene, fs.existsSync(dest) ? fileSha(dest) : null);
+  }
+  const backup = backupReplaced({ root, cfg, mappedScenes: processedScenes });
+  if (backup.files.length) graph.log(`ingest: backed up ${backup.files.length} replaced file(s) -> ${path.relative(root, backup.dir).replace(/\\/g, '/')}`);
+
   // Keep originals + stage renamed copies for the existing intake wrapper.
   // IMPORTANT: probe the SOURCE (inbox) file, never the resized output.
   const warningsByScene = {};
@@ -96,7 +168,7 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
   const hashByScene = {};
   for (const m of result.mapped) {
     if (only && only !== m.scene) continue;
-    const src = path.join(inbox, m.file);
+    const src = path.join(drop.dir, m.file);
     const destOrig = path.join(originals, m.file);
     fs.copyFileSync(src, destOrig);
     const q = probeImage(src);
@@ -166,6 +238,17 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
     man.factory = { story: cfg.story, ingested: new Date().toISOString(), provisionalLicense: !cfg.intake.licenseTermsUrl };
     fs.writeFileSync(manifestPath, JSON.stringify(man, null, 2) + '\n', 'utf8');
   }
+  // Round 13 item 2: exactly one summary line after a successful ingest.
+  let added = 0; let replaced = 0; let unchanged = 0;
+  for (const scene of processedScenes) {
+    const dest = path.resolve(root, cfg.paths.illustrations, targetDestName(scene));
+    const before = beforeHashes.get(scene);
+    const after = fs.existsSync(dest) ? fileSha(dest) : null;
+    if (before === null) added += 1;
+    else if (after && after !== before) replaced += 1;
+    else unchanged += 1;
+  }
+  console.log(`${added} new, ${replaced} replaced, ${unchanged} unchanged`);
   graph.log(`ingest done. ACTION: review each image (docs/IMAGE_REVIEW_CHECKLIST.md); check watermark vs tool terms; set reviewed:true.`);
-  return { mapped: result.mapped.length, unmapped: result.unmapped.length, duplicates: Object.keys(result.duplicates).length, missing };
+  return { mapped: result.mapped.length, unmapped: result.unmapped.length, duplicates: Object.keys(result.duplicates).length, missing, added, replaced, unchanged };
 }
