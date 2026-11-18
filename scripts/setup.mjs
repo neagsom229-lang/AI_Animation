@@ -3,9 +3,10 @@
  * @fileoverview One-command environment setup + health check for Kuanimation Studio.
  *
  * Checks Node, finds a suitable Python (prefers 3.12/3.11 via `py -3.12`),
- * creates .venv-depth, installs the depth dependencies with `python -m pip`,
- * checks full Chrome for the GPU render, checks Remotion ffmpeg decode, and
- * runs the RAM preflight. Prints EXACT fix commands for every failure.
+ * creates the ONE env .venv-depth, installs torch + transformers + Pillow +
+ * numpy + edge-tts with `python -m pip`, verifies each import, checks full
+ * Chrome for the GPU render, checks Remotion ffmpeg decode, and runs the RAM
+ * preflight. Prints EXACT fix commands for every failure.
  *
  * No silent fallbacks: if only Python 3.13+/3.14 exists, warns that torch may
  * lack wheels and suggests `--depth gradient` (the labeled fallback). Never
@@ -21,9 +22,16 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { importProbeScript, parseImportProbe } from './lib/film-env.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const VENV = path.join(ROOT, '.venv-depth');
+const ENV_DEPS = ['torch', 'transformers', 'pillow', 'numpy', 'edge-tts'];
+const IMPORT_NAMES = ['torch', 'transformers', 'PIL', 'numpy', 'edge_tts'];
+const ENV_DEPS_PAIRS = [
+  ['torch', 'torch'], ['transformers', 'transformers'], ['pillow', 'PIL'],
+  ['numpy', 'numpy'], ['edge-tts', 'edge_tts'],
+];
 
 export function parseArgs(argv) {
   const args = { depth: 'model', install: true };
@@ -94,6 +102,10 @@ export async function main(argv = process.argv.slice(2)) {
     return finish(R);
   }
   R.check('Python', true, `${py.version} (${py.preferred ? 'preferred' : 'default'})`);
+  if (fs.existsSync(path.join(ROOT, '.venv'))) {
+    console.log('[WARN] legacy .venv found: deprecated and IGNORED by the film pipeline (kept on disk; nothing deleted).');
+    console.log('       The ONE env is .venv-depth — this setup installs/verifies it.');
+  }
   if (!py.preferred && !versionHasTorchWheels(py.version)) {
     console.log(`[WARN] Python ${py.version}: PyTorch may lack wheels for this version.`);
     console.log('       torch depth model may not install; use --depth gradient for the labeled fallback.');
@@ -124,7 +136,7 @@ export async function main(argv = process.argv.slice(2)) {
     for (const f of [tmp, path.join(ROOT, 'out', '.setup-test-out.wav')]) { try { fs.unlinkSync(f); } catch { /* best effort */ } }
   }
 
-  // 5. install depth deps into .venv-depth using `python -m pip` (never pip.exe)
+  // 5. install the ONE env deps into .venv-depth using `python -m pip` (never pip.exe)
   if (args.install && args.depth === 'model') {
     const pyBin = path.join(VENV, process.platform === 'win32' ? 'Scripts' : 'bin', 'python' + (process.platform === 'win32' ? '.exe' : ''));
     if (!fs.existsSync(pyBin)) {
@@ -133,11 +145,20 @@ export async function main(argv = process.argv.slice(2)) {
       R.check('Create .venv-depth', mk.ok, mk.ok ? VENV : mk.out.slice(0, 160), 'Install Python 3.12 and re-run; or use --depth gradient');
     }
     if (fs.existsSync(pyBin)) {
-      const deps = ['torch', 'transformers', 'Pillow', 'numpy'];
-      console.log(`[setup] Installing (python -m pip): ${deps.join(' ')} ...`);
-      const ins = run(pyBin, ['-m', 'pip', 'install', ...deps]);
-      R.check('Depth Python deps', ins.ok, ins.ok ? deps.join(', ') : ins.out.slice(-200),
-        `${pyBin} -m pip install ${deps.join(' ')}  (or use --depth gradient)`);
+      console.log(`[setup] Installing (python -m pip): ${ENV_DEPS.join(' ')} ...`);
+      const ins = run(pyBin, ['-m', 'pip', 'install', ...ENV_DEPS]);
+      R.check('Python deps install', ins.ok, ins.ok ? ENV_DEPS.join(', ') : ins.out.slice(-200),
+        `${pyBin} -m pip install ${ENV_DEPS.join(' ')}  (or use --depth gradient)`);
+
+      // Item 1: verify EVERY import in the one env (never assume install = import).
+      const probe = run(pyBin, ['-c', importProbeScript()]);
+      const imports = parseImportProbe(probe.out);
+      for (const [pipName, importName] of ENV_DEPS_PAIRS) {
+        const v = imports[importName];
+        const ok = Boolean(v) && !String(v).startsWith('ERR:');
+        R.check(`import ${importName}`, ok, ok ? String(v) : (v || probe.out.slice(-120) || 'no output'),
+          `${pyBin} -m pip install ${pipName}`);
+      }
     }
   } else if (args.depth === 'gradient') {
     console.log('[setup] --depth gradient: skipping torch install (labeled fallback will be used).');

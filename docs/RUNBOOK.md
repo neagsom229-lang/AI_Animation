@@ -61,7 +61,11 @@ manifest.json). QA sheets: `out/review/`.
 4. `python scripts/depth.py --story src/stories/khmer-empire.json --depth model`.
 
 ## Environment
-- `node scripts/setup.mjs` (installs deps into `.venv-depth`, checks Chrome/ffmpeg).
+- **ONE env:** `.venv-depth` (Python 3.11/3.12) with torch, transformers,
+  pillow, numpy and edge-tts. `node scripts/film.mjs setup` creates it and
+  verifies every import; `node scripts/film.mjs doctor` checks it first.
+- The legacy `.venv` is deprecated: scripts warn if it exists but never use it
+  (nothing is deleted).
 - `node scripts/doctor.mjs` (live edge-tts call; Azure call if env keys present).
 - Azure TTS (optional): set `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` in the
   environment only — never commit them (`tests` + `check_secrets.py` enforce).

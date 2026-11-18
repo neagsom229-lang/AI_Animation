@@ -13,12 +13,14 @@ const strictGates = runGates({ cfg, story, allowMissing: false });
 const looseGates = runGates({ cfg, story, allowMissing: true });
 
 test('runGates stops at the FIRST blocker (duplicates) with a fix', () => {
-  assert.ok(strictGates.length >= 2, 'at least ingest + duplicates ran');
-  assert.equal(strictGates[0].name, 'ingest');
+  assert.ok(strictGates.length >= 3, 'at least environment + ingest + duplicates ran');
+  assert.equal(strictGates[0].name, 'environment', 'Round 13: environment is the first gate');
   assert.equal(strictGates[0].status, 'PASS');
-  assert.equal(strictGates[1].name, 'duplicates');
-  assert.equal(strictGates[1].status, 'BLOCK');
-  assert.ok(strictGates[1].fix.includes('REQUEUE'), 'fix command must include requeue');
+  assert.equal(strictGates[1].name, 'ingest');
+  assert.equal(strictGates[1].status, 'PASS');
+  assert.equal(strictGates[2].name, 'duplicates');
+  assert.equal(strictGates[2].status, 'BLOCK');
+  assert.ok(strictGates[2].fix.includes('REQUEUE'), 'fix command must include requeue');
   assert.ok(!strictGates.some((g) => g.name === 'resolution'), 'must stop at first blocker');
 });
 

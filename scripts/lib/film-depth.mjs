@@ -111,7 +111,12 @@ export function runDepth({ cfg, args, graph, root = process.cwd() }) {
   const mode = args.depthMode || cfg.depth.mode;
   if (mode === 'gradient') {
     graph.log('depth: --depth gradient (explicit labeled fallback, no model)');
-    return spawnDepth('python', [], root, cfg, graph, mode, args);
+    const py = venvPython(root);
+    if (!fs.existsSync(py)) {
+      graph.log(`depth: WARN ${path.basename(path.dirname(path.dirname(py)))} missing — using legacy 'python' (deprecated). Run: node scripts/film.mjs setup`);
+      return spawnDepth('python', [], root, cfg, graph, mode, args);
+    }
+    return spawnDepth(py, [], root, cfg, graph, mode, args);
   }
   // Model mode — ensure a torch-capable interpreter.
   const prep = prepareModelInterpreter(root);

@@ -21,6 +21,15 @@ import path from 'path';
 
 const results = [];
 
+// Round 13 item 1: the film pipeline has ONE env (.venv-depth). Prefer its
+// interpreter; the legacy `python` still works but is reported as deprecated.
+const VENV_PY = path.join(process.cwd(), '.venv-depth', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+const PY = fs.existsSync(VENV_PY) ? VENV_PY : 'python';
+const PY_SHELL = PY === 'python' && process.platform === 'win32';
+if (PY === 'python') {
+  console.log('[WARN] .venv-depth not found — using legacy python (deprecated). Run: node scripts/film.mjs setup');
+}
+
 function record(name, ok, detail, fix) {
   results.push({ name, ok, detail, fix });
   const mark = ok ? '[PASS]' : '[FAIL]';
@@ -71,11 +80,11 @@ function main() {
   );
 
   // 2. Python + pip module
-  const py = spawnSync('python', ['--version'], { encoding: 'utf8', shell: true });
+  const py = spawnSync(PY, ['--version'], { encoding: 'utf8', shell: true });
   let pythonOk = false;
   if (py.status === 0 && /Python 3/.test(`${py.stdout}${py.stderr}`)) {
     const ver = `${py.stdout}`.trim() || `${py.stderr}`.trim();
-    const pip = spawnSync('python', ['-m', 'pip', '--version'], { encoding: 'utf8', shell: true });
+    const pip = spawnSync(PY, ['-m', 'pip', '--version'], { encoding: 'utf8', shell: true });
     pythonOk = pip.status === 0;
     record(
       'Python 3 + pip',
@@ -90,7 +99,7 @@ function main() {
 
   // 3. edge-tts importable (python.exe is a real exe: spawn directly, no shell)
   if (pythonOk) {
-    const et = spawnSync('python', ['-c', 'import edge_tts'], { encoding: 'utf8' });
+    const et = spawnSync(PY, ['-c', 'import edge_tts'], { encoding: 'utf8' });
     record(
       'edge-tts package',
       et.status === 0,
@@ -129,7 +138,7 @@ function main() {
     console.log('       (live edge-tts call, may take ~10 s)...');
     const tmpLive = fs.mkdtempSync(path.join(os.tmpdir(), 'kuan-doctor-live-'));
     try {
-      const live = spawnSync('python', [
+      const live = spawnSync(PY, [
         'scripts/generate-voice.py',
         '--story', 'tests/fixtures/one-line-story.json',
         '--out', tmpLive,
@@ -153,7 +162,7 @@ function main() {
   const azureKey = process.env.AZURE_SPEECH_KEY;
   const azureRegion = process.env.AZURE_SPEECH_REGION;
   if (azureKey && azureRegion) {
-    const hasAzureSdk = spawnSync('python', ['-c', 'import azure.cognitiveservices.speech'], { encoding: 'utf8' });
+    const hasAzureSdk = spawnSync(PY, ['-c', 'import azure.cognitiveservices.speech'], { encoding: 'utf8' });
     if (hasAzureSdk.status !== 0) {
       record('Azure Speech (env configured)', false,
         'AZURE_SPEECH_KEY + REGION present but azure-cognitiveservices-speech not importable',
@@ -171,7 +180,7 @@ function main() {
         'r=s.speak_text_async("សួស្តី").get();',
         'import os as o; print("OK" if o.path.getsize(f.name)>1000 else "EMPTY"); o.unlink(f.name)',
       ].join('\n');
-      const az = spawnSync('python', ['-c', probe], { encoding: 'utf8', timeout: 60000 });
+      const az = spawnSync(PY, ['-c', probe], { encoding: 'utf8', timeout: 60000 });
       const azOk = az.status === 0 && /OK/.test(az.stdout || '');
       record('Azure Speech live call (env configured)', azOk,
         azOk ? 'synthesized a 1-word Khmer WAV' : `exit ${az.status}; ${((az.stderr || az.stdout || '').trim().split('\n').pop() || 'no output')}`,

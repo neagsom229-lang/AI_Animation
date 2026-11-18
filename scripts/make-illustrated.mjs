@@ -31,6 +31,7 @@ import { publicAssetPath } from '../remotion/lib/illustrated-assets.ts';
 import { illustratedSceneHash } from './lib/illustrated-scene-cache.mjs';
 import { stitchScenes } from './render-scenes.mjs';
 import { pickContactFrames, tileContactSheet } from './lib/contact-sheet.mjs';
+import { voicePython } from './lib/film-env.mjs';
 import {
   runPreflight, formatPreflight, snapshotChromePids, reapNewRemotionChrome, DEFAULT_CONCURRENCY,
 } from './preflight.mjs';
@@ -181,7 +182,9 @@ export async function main(argv = process.argv.slice(2)) {
   if (args.noPronunciation) genArgs.push('--no-pronunciation');
   if (args.mock) genArgs.push('--mock');
   console.log(`[voice] ${genArgs.join(' ')}`);
-  execFileSync('python', genArgs, { stdio: 'inherit', cwd: ROOT });
+  const vp = voicePython(ROOT);
+  if (vp.warning) console.log(`[voice] WARN ${vp.warning}`);
+  execFileSync(vp.cmd, [...vp.prefix, ...genArgs], { stdio: 'inherit', cwd: ROOT });
   const voiceData = JSON.parse(fs.readFileSync(path.resolve(ROOT, voiceJson), 'utf8'));
 
   // Duration gate.

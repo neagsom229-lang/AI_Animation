@@ -24,9 +24,10 @@ import { StageGraph, hashInputs } from './lib/film-graph.mjs';
 import { computeStatus } from './lib/film-status.mjs';
 import { buildIllustratedTimeline } from '../remotion/lib/illustrated-timing.ts';
 import { costGuard } from './lib/film-cost.mjs';
+import { voicePython } from './lib/film-env.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const COMMANDS = ['status', 'doctor', 'estimate', 'ingest', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
+const COMMANDS = ['setup', 'status', 'doctor', 'estimate', 'ingest', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
 
 /** Parse CLI args. Throws on unknown command/flag with exact usage. */
 export function parseArgs(argv) {
@@ -151,6 +152,10 @@ export async function main(argv = process.argv.slice(2)) {
     let code = 0;
 
     switch (args.command) {
+      case 'setup':
+        runCmd('node', ['scripts/setup.mjs'], { verbose: args.verbose, label: 'setup', fix: 'Fix the failing check printed above, then re-run: node scripts/film.mjs setup' });
+        code = 0;
+        break;
       case 'status':
         code = await cmdStatus({ cfg, args, graph });
         break;
@@ -179,13 +184,16 @@ export async function main(argv = process.argv.slice(2)) {
         code = await filmUpscale({ cfg, args, graph, data, root: ROOT });
         break;
       }
-      case 'voice':
-        runCmd('python', ['scripts/generate-voice.py', '--story', cfg.story, '--lang', 'km',
+      case 'voice': {
+        const vp = voicePython(ROOT);
+        if (vp.warning) graph.log(`voice: WARN ${vp.warning}`);
+        runCmd(vp.cmd, [...vp.prefix, 'scripts/generate-voice.py', '--story', cfg.story, '--lang', 'km',
           '--voice', cfg.tts.voice, '--tts', cfg.tts.provider, '--rate', String(cfg.tts.rate),
           '--out', `public/voice/${data.storyName}`, '--json', `public/voice-${data.storyName}.json`,
           ...(args.draft ? ['--mock'] : [])],
-          { verbose: args.verbose, label: 'voice', fix: 'Check network/edge-tts; run node scripts/doctor.mjs' });
+          { verbose: args.verbose, label: 'voice', fix: 'Check network/edge-tts; run node scripts/film.mjs setup' });
         break;
+      }
       case 'preview':
         await preview({ cfg, args, graph, data, force: args.force, only: args.only });
         code = 0;

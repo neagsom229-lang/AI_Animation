@@ -14,6 +14,7 @@ import { loadConfig, configHash } from './lib/film-config.mjs';
 import { checkIllustratedAssets } from './illustrated-manifest.mjs';
 import { buildImageRecords, groupDuplicates, requeueBlock, inlineRequeueHint, requeueTargets } from './lib/film-duplicates.mjs';
 import { isManifestEntryReady, REQUIRED_MANIFEST_FIELDS, REQUIRED_MANIFEST_FLAGS, sourceResolutionGate } from './lib/image-check.mjs';
+import { probeEnvironment } from './lib/film-env.mjs';
 
 const ROOT = process.cwd();
 
@@ -33,6 +34,11 @@ export function runGates({ cfg, story, allowMissing = false }) {
   const add = (name, status, detail, fix = '') => gates.push({ name, status, detail, fix });
   const illDir = path.resolve(ROOT, cfg.paths.illustrations);
   const manifestPath = path.join(illDir, 'manifest.json');
+
+  // 0) environment (Round 13 item 1) — the ONE Python env + ffmpeg + node.
+  const env = probeEnvironment(ROOT);
+  add('environment', env.ok ? 'PASS' : 'BLOCK', env.summary, env.fix);
+  if (!env.ok) return gates;
 
   // 1) ingest — normalized images present for illustration scenes.
   try {
@@ -135,6 +141,8 @@ export async function main(argv = process.argv.slice(2)) {
   if (args.story) cfg.story = args.story;
   const story = JSON.parse(fs.readFileSync(path.resolve(ROOT, cfg.story), 'utf8'));
   console.log(`[film doctor] config=${configHash(cfg)} story=${cfg.story}${args.allowMissing ? ' --allow-missing' : ''}`);
+  const envProbe = probeEnvironment(ROOT);
+  for (const w of envProbe.warnings || []) console.log(`[WARN] ${w}`);
   const gates = runGates({ cfg, story, allowMissing: args.allowMissing });
 
   console.log('\ngate                  status   detail');

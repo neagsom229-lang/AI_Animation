@@ -39,12 +39,12 @@ renderer; Python for the voice).
    the user asks otherwise; ask only about language and voice service if unknown.
 2. **Project.** Make one folder. Copy everything in `assets/` into it (rename
    `film-template.html` → `film.html`), then `npm i --no-audit --no-fund`. For the voice:
-   `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
+   `python3 -m venv .venv-voice && .venv-voice/bin/pip install -r requirements.txt`.
 3. **Write the lines first.** `narration.json` = `[{scene, lines: [[spoken, subtitle|null, subtitle2], ...]}]`.
    Short spoken sentences (one idea each); numbers written as words for the voice, digits
    in the subtitle. See [references/narration.md](references/narration.md).
-4. **Generate the voice.** Set `GEMINI_API_KEY` in the environment through a secure prompt or secret manager, then run `.venv/bin/python tts_gemini.py --voice Bodi --style "…"`.
-   (batched; free tier ≈10 requests/day) or `.venv/bin/python tts_edge.py --voice <voice>` with a voice
+4. **Generate the voice.** Set `GEMINI_API_KEY` in the environment through a secure prompt or secret manager, then run `.venv-voice/bin/python tts_gemini.py --voice Bodi --style "…"`.
+   (batched; free tier ≈10 requests/day) or `.venv-voice/bin/python tts_edge.py --voice <voice>` with a voice
    for the film's language (`edge-tts --list-voices`; e.g. `en-US-AriaNeural`, `km-KH-PisethNeural`).
    Both write `audio/` and `voice.js` (durations + lip-sync envelopes). Scene lengths
    come from the voice, so do this before timing any action.
