@@ -1,0 +1,10 @@
+# scene-18 — Modern-day dawn over restored temples
+
+FILENAME: assets-src/illustrations/scene-18.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): Today the temples still stand, a living heritage of the Khmer people, and a reminder of what water, stone and a shared vision can build.
+NARRATION (km): សព្វថ្ងៃនេះ ប្រាសាទនៅតែឈរស្ងៀម ជាបេតិកភណ្ឌរស់នៃជនជាតិខ្មែរ ហើយរំលឹកយើងពីអ្វីដែលទឹក ថ្ម និងចក្ខុវិស័យរួមអាចកសាងបាន។
+
+PROMPT:
+Detailed painterly historical illustration, present-day Angkor, Cambodia, soft sunrise light, restored sandstone temples with moss, visitors and monks in respectful contemporary dress, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. A hopeful present-day dawn over the restored Angkor Wat complex: visitors walking the causeway, monks and locals in contemporary dress, the towers golden in sunrise, lotus moat and palms, a sense of living heritage and continuity — but with no modern objects such as vehicles, signage or electronics visible.

@@ -1,0 +1,10 @@
+# scene-16 — Abandoned galleries, drought, cracked reservoir
+
+FILENAME: assets-src/illustrations/scene-16.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): Over time, shifting beliefs, a changing climate and rivalry with neighbouring kingdoms weakened the empire.
+NARRATION (km): យូរៗទៅ សាសនា អាកាសធាតុ និងការប្រជែងជាមួយនគរជិតខាង បានធ្វើឲ្យអាណាចក្រចុះខ្សោយ។
+
+PROMPT:
+Detailed painterly historical illustration, 14th–15th-century Angkorian Khmer Empire, harsher late-afternoon light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, encroaching tropical jungle, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. A mood of decline: galleries reclaimed by vines and roots, a dried and cracked reservoir bed, cracked earth and withered rice stalks, scattered blocks, a few departed inhabitants, harsher late-afternoon light and encroaching jungle.

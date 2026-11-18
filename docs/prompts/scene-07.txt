@@ -1,0 +1,10 @@
+# scene-07 — Angkor Wat under construction (1113–1150)
+
+FILENAME: assets-src/illustrations/scene-07.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): In the early twelfth century, King Suryavarman II began Angkor Wat, a temple to Vishnu and one of the largest religious monuments in the world.
+NARRATION (km): នៅដើមសតវត្សរ៍ទី ១២ ព្រះបាទសូរ្យវរ្ម័នទី ២ ទ្រង់ចាប់ផ្តើមកសាងប្រាសាទអង្គរវត្ត ថ្វាយព្រះវិស្ណុ ជាសំណង់សាសនាដ៏ធំបំផុតមួយលើពិភពលោក។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire (1113–1150), rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. Angkor Wat half-built: bamboo scaffolding against rising sandstone towers, blocks on wooden sledges and rope hoists, masons and overseers on the galleries, dust in the air, the central prang still incomplete.

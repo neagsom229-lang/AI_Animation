@@ -1,0 +1,10 @@
+# scene-04 — New city and temple-mountain (Yasodharapura, 889)
+
+FILENAME: assets-src/illustrations/scene-04.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): Around 889, King Yasovarman I founded Yasodharapura, the first city of Angkor.
+NARRATION (km): ប្រហែលឆ្នាំ ៨៨៩ ព្រះបាទយសោវរ្ម័នទី ១ ទ្រង់បង្កើតក្រុងយសោធរបុរៈ ជាទីក្រុងដំបូងនៃអង្គរ។
+
+PROMPT:
+Detailed painterly historical illustration, late 9th-century Angkorian Khmer Empire (889), rich warm golden-hour light, early sandstone and brick temple-mountains with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. A planned new capital with a central temple-mountain rising above a grid of wooden houses and streets, a moat and causeway, surveying officials with measuring ropes, a sense of a city being laid out.

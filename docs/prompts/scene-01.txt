@@ -1,0 +1,10 @@
+# scene-01 — Dawn over Angkor Wat
+
+FILENAME: assets-src/illustrations/scene-01.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): Twelve centuries ago, in the heart of Southeast Asia, a kingdom rose that would shape a civilization.
+NARRATION (km): កាលពីជាងដប់ពីរសតវត្សរ៍មុន នៅចិត្តនៃអាស៊ីអាគ្នេយ៍ មានអាណាចក្រមួយបានកើតឡើង ដែលបានបង្កើតអរិយធម៌ដ៏អស្ចារ្យ។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. Dawn mist rising over the five lotus-bud towers of Angkor Wat, reflected in a lotus-covered moat, a lone fisherman's narrow boat, soft pink and gold sky, low atmospheric haze.

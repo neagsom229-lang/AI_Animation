@@ -1,0 +1,10 @@
+# scene-17 — Monks at Angkor Wat (1431)
+
+FILENAME: assets-src/illustrations/scene-17.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): In the fifteenth century the capital moved south, but Angkor was never forgotten. Monks kept Angkor Wat alive as a place of worship.
+NARRATION (km): នៅសតវត្សរ៍ទី ១៥ រាជធានីបានប្តូរទៅខាងត្បូង ប៉ុន្តែអង្គរមិនដែលត្រូវបានបំភ្លេចទេ ព្រះសង្ឃនៅតែថែរក្សាអង្គរវត្តជាទីសក្ការៈ។
+
+PROMPT:
+Detailed painterly historical illustration, 15th-century Angkorian Khmer Empire (1431), rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. Buddhist monks in saffron robes tending Angkor Wat as a living place of worship: offering lotus flowers and incense before a Buddha image in a gallery, quiet devotion, shafts of light through a doorway, moss and vines on ancient carvings.

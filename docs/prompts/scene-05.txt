@@ -1,0 +1,10 @@
+# scene-05 — Canals, moats and monsoon rice fields
+
+FILENAME: assets-src/illustrations/scene-05.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): The secret of Angkor was water. Canals and reservoirs captured the monsoon rains to water the fields and help feed a growing city.
+NARRATION (km): អាថ៌កំបាំងនៃអង្គរគឺទឹក។ ព្រែក និងអាងទឹក ស្តុកទឹកភ្លៀងរដូវវស្សា ដើម្បីស្រោចស្រពស្រែ និងចិញ្ចឹមទីក្រុងដ៏ធំ។
+
+PROMPT:
+Detailed painterly historical illustration, Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. An intricate network of canals and moats feeding green monsoon rice paddies, earthen dikes and wooden sluice gates, farmers guiding water, heavy rain clouds breaking to sunlight over the fields.

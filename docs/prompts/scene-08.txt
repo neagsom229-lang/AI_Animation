@@ -1,0 +1,10 @@
+# scene-08 — Oxen carts and canal barges carrying sandstone
+
+FILENAME: assets-src/illustrations/scene-08.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): Sandstone was quarried on Mount Kulen and carried to the site, much of it by canal and river.
+NARRATION (km): ដុំថ្មភក់ត្រូវបានកាប់ពីភ្នំគូលេន ហើយដឹកជញ្ជូនមកកាន់ទីតាំង ភាគច្រើនតាមព្រែក និងទន្លេ។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. A transport scene: long oxen carts hauling carved sandstone blocks along a causeway and flat-bottomed barges piled with stone moving along a canal, handlers with poles, reflections in the water, a temple under construction in the distance.

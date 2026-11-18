@@ -1,0 +1,10 @@
+# scene-06 — Farmers, weavers and craftsmen
+
+FILENAME: assets-src/illustrations/scene-06.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): Farmers, weavers and craftsmen were the foundation of the empire.
+NARRATION (km): កសិករ ជាងត្បាញ និងជាងសិប្បកម្ម គឺជាមូលដ្ឋានគ្រឹះនៃអាណាចក្រ។
+
+PROMPT:
+Detailed painterly historical illustration, Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. A lively workshop scene: farmers threshing rice, a woman at a backstrap loom, a potter shaping clay vessels, a blacksmith at a small forge, detailed hands and expressive faces, baskets and tools, warm earthy tones.

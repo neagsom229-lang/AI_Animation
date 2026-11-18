@@ -1,0 +1,10 @@
+# scene-14 — Hospital and rest house with healers
+
+FILENAME: assets-src/illustrations/scene-14.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): His reign also left rest houses along the roads, and inscriptions record more than a hundred hospitals.
+NARRATION (km): រជ្ជកាលរបស់ទ្រង់ក៏បានបន្សល់ទុកផ្ទះសម្រាកតាមផ្លូវ ហើយសិលាចារឹកកត់ត្រាមន្ទីរពេទ្យជាង ១០០។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. A royal hospital and roadside rest house: healers attending patients, herbalists with bowls and bundles of medicinal plants, attendants bringing water, a quiet courtyard with columns, an inscription stele near the entrance, calm compassionate mood.

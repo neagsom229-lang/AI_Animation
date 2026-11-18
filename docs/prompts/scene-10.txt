@@ -1,0 +1,10 @@
+# scene-10 — Priests, apsara dancers and king in procession
+
+FILENAME: assets-src/illustrations/scene-10.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): Priests, dancers and kings gathered here. The temple was both a sacred mountain and a monument to power.
+NARRATION (km): បព្វជិត អប្សរា និងព្រះរាជា ជួបជុំគ្នានៅទីនេះ ប្រាសាទជាទាំងភ្នំពិសិដ្ឋ និងស្នាដៃនៃអំណាច។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. A ceremonial procession within the temple: gold-adorned apsara dancers in silks, priests with incense and conches, a king beneath a royal palanquin and parasols, musicians with gongs, courtiers lining a sandstone causeway.

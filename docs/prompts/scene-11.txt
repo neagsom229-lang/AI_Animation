@@ -1,0 +1,10 @@
+# scene-11 — Cham war boats on the Tonle Sap, burning city (1177)
+
+FILENAME: assets-src/illustrations/scene-11.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): In 1177, Cham invaders sailed up the Tonle Sap and sacked the capital.
+NARRATION (km): នៅឆ្នាំ ១១៧៧ ពួកចាមបានចូលលុកលុយតាមទន្លេសាប ហើយបំផ្លាញរាជធានី។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. Cham invasion: long war canoes with shields and archers on the Tonle Sap river, smoke and flames rising from a sacked wooden city on the shore, panicked villagers, orange firelight against a darkening sky, reflections and drifting embers.

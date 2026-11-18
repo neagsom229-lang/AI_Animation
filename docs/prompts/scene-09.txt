@@ -1,0 +1,10 @@
+# scene-09 — Carvers on the bas-relief galleries
+
+FILENAME: assets-src/illustrations/scene-09.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): Along its galleries, carvers told epic stories in stone, from gods and heroes to scenes of everyday life.
+NARRATION (km): តាមច្រករបៀងនៃប្រាសាទ ជាងចម្លាក់បានរៀបរាប់រឿងរ៉ាវលើថ្ម ចាប់ពីព្រះ និងវីរបុរស រហូតដល់ជីវភាពប្រចាំថ្ងៃ។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. Close view of sculptors carving narrative bas-reliefs into a sandstone gallery wall — gods, heroes and everyday scenes emerging from the stone — chisels and mallets, stone chips on the floor, a master carver directing apprentices.

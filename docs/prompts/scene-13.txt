@@ -1,0 +1,10 @@
+# scene-13 — Bayon with smiling faces and walled gate
+
+FILENAME: assets-src/illustrations/scene-13.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): He built Angkor Thom, a walled city, and the Bayon, with its serene faces gazing in every direction.
+NARRATION (km): ទ្រង់កសាងក្រុងអង្គរធំ និងប្រាសាទបាយ័ន ដែលមានមុខញញឹមសម្លឹងទៅគ្រប់ទិស។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. The Bayon temple with its serene, enigmatic smiling stone faces gazing in every direction, a massive walled gate with carved elephants and a face-tower above, people passing through the gate, moss on the sandstone.

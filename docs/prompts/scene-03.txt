@@ -1,0 +1,10 @@
+# scene-03 — Roluos temples and a baray
+
+FILENAME: assets-src/illustrations/scene-03.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): From early capitals near Roluos, his successors built temples and vast reservoirs called barays.
+NARRATION (km): ពីរាជធានីដំបូងៗនៅតំបន់រលួស ព្រះរាជាស្នងរាជ្យបន្តបានកសាងប្រាសាទ និងអាងទឹកដ៏ធំៗហៅថា បារាយណ៍។
+
+PROMPT:
+Detailed painterly historical illustration, 9th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered brick prangs and early sandstone shrines with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. The early Roluos temple complex of brick prangs beside a vast baray reservoir, water buffalo at the water's edge, palm trees, calm water mirroring the towers, workers maintaining an earthen embankment.

@@ -1,0 +1,10 @@
+# scene-15 — Zhou Daguan in the market (1296)
+
+FILENAME: assets-src/illustrations/scene-15.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): In 1296, the Chinese envoy Zhou Daguan arrived and recorded the markets, rituals and daily life of Angkor.
+NARRATION (km): នៅឆ្នាំ ១២៩៦ អគ្គរាជទូតចិន ចូវ តាកាន់ បានមកដល់ ហើយកត់ត្រាអំពីផ្សារ ពិធី និងជីវភាពរស់នៅនៃអង្គរ។
+
+PROMPT:
+Detailed painterly historical illustration, late 13th-century Angkorian Khmer Empire (1296), rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. A bustling Angkor market observed by the Chinese envoy Zhou Daguan in a distinct outer robe: merchants with stalls of fruit, fish and textiles, scribes recording on palm-leaf manuscripts, porters with shoulder poles, a crowd of detailed, expressive faces.

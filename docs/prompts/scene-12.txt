@@ -1,0 +1,10 @@
+# scene-12 — Jayavarman VII rallying warriors (1181)
+
+FILENAME: assets-src/illustrations/scene-12.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): A prince named Jayavarman VII rallied his people, drove out the invaders, and was crowned king around 1181.
+NARRATION (km): បុត្រម្នាក់ព្រះនាមជ័យវរ្ម័នទី ៧ បានប្រមូលផ្តុំប្រជាជន ដេញពួកឈ្លានពាន ហើយឡើងគ្រងរាជ្យនៅប្រហែលឆ្នាំ ១១៨១។
+
+PROMPT:
+Detailed painterly historical illustration, 12th-century Angkorian Khmer Empire, rich warm golden-hour light, weathered sandstone temples with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. Jayavarman VII standing on a stepped platform addressing assembled warriors and villagers, raised arms, banners and spears, determined faces, a jungle clearing with a distant temple silhouette, dramatic low sunlight.

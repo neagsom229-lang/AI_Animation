@@ -1,0 +1,10 @@
+# scene-02 — Mount Kulen coronation (802)
+
+FILENAME: assets-src/illustrations/scene-02.png
+SIZE: 1920x1080 (16:9); source must be at least 1600 px wide for a final render
+
+NARRATION (en): In 802, King Jayavarman II proclaimed himself a universal monarch on Mount Kulen, and the Khmer Empire was born.
+NARRATION (km): នៅឆ្នាំ ៨០២ ព្រះបាទជ័យវរ្ម័នទី ២ ទ្រង់ប្រកាសជាស្តេចចក្រពត្តិនៅលើភ្នំគូលេន ហើយអាណាចក្រខ្មែរក៏កកើតឡើង។
+
+PROMPT:
+Detailed painterly historical illustration, 9th-century Angkorian Khmer Empire (802), rich warm golden-hour light, weathered brick and early sandstone shrines with moss, villagers in sampot and shoulder cloths, lush tropical vegetation, highly detailed faces and clothing, consistent art style, wide 16:9, no text, no modern objects. Coronation ceremony on the summit of Mount Kulen: Jayavarman II on a carved wooden throne, brahmins holding ceremonial parasols and conch shells, soldiers with spears, a river of carved sandstone lingas below, forest canopy beyond.
