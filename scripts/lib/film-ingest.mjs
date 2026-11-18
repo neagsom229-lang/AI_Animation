@@ -10,7 +10,10 @@ import { execFileSync } from 'node:child_process';
 import { mapFilenames, missingScenes } from './film-map.mjs';
 import { hashInputs } from './film-graph.mjs';
 import { isUpscaled, sourceResolutionGate, aspectCropPercent } from './image-check.mjs';
-import { imageToGray32, perceptualHash } from './film-duplicates.mjs';
+import { imageToGray32, perceptualHash, groupDuplicates } from './film-duplicates.mjs';
+import {
+  PROFILE_FINAL, resolveProfile, buildGateFindings, duplicateFindings, summarizeFindings,
+} from './film-profile.mjs';
 
 /** Probe an image with Remotion ffprobe (returns width/height/pix_fmt). */
 export function probeImage(file) {
@@ -104,28 +107,31 @@ function fileSha(file) {
 }
 
 /** The ingest stage runner. */
-export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
+export async function ingest({ cfg, args, graph, data, force, only, verbose, profile: profileArg }) {
   const root = process.cwd();
   const inbox = path.resolve(root, cfg.paths.inbox);
   const originals = path.resolve(root, cfg.paths.originals);
   const staging = path.resolve(root, cfg.paths.build, 'ingest', data.storyName);
+  const profile = resolveProfile(profileArg, args.profile || 'draft');
+  const isFinal = profile === PROFILE_FINAL;
   fs.mkdirSync(inbox, { recursive: true });
   fs.mkdirSync(originals, { recursive: true });
   fs.mkdirSync(staging, { recursive: true });
 
   // Round 12 item 4: state the license requirement FIRST, before scanning any
   // image — the operator must know up front that a license URL is mandatory.
+  graph.log(`ingest PROFILE: ${profile}${isFinal ? ' (every current block applies; no --force)' : ' (warnings only, draft output is NOT releasable)'}`);
   graph.log('ingest REQUIREMENT: each image must have a licenseTermsUrl (tool license URL) recorded in film.config.json → intake.licenseTermsUrl.');
   const licenseUrl = cfg.intake?.licenseTermsUrl || '';
   if (licenseUrl) {
     graph.log(`  licenseTermsUrl = ${licenseUrl}`);
-  } else if (force) {
-    graph.log('  WARN: licenseTermsUrl is EMPTY — --force grants a PROVISIONAL license only; final render will BLOCK until filled.');
+  } else if (!isFinal) {
+    graph.log('  WARN: licenseTermsUrl is EMPTY — allowed in draft profile (warning only); a final render will BLOCK until filled.');
   } else {
     throw new Error(
-      `ingest: licenseTermsUrl is required in film.config.json (intake.licenseTermsUrl). ` +
-      `FIX: set it to the generating tool's license terms URL, then re-run. ` +
-      `Use --force only for a provisional dry run (final render blocked).`
+      `ingest: licenseTermsUrl is required in film.config.json (intake.licenseTermsUrl) for --profile final. ` +
+      `FIX: node scripts/film.mjs review --license-url <url>, then re-run. ` +
+      `Drafts may omit it: --profile draft (default).`
     );
   }
 
@@ -187,7 +193,7 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
       hashByScene[m.scene] = { sourceSha256: crypto.createHash('sha256').update(fs.readFileSync(src)).digest('hex'),
         phash: perceptualHash(imageToGray32(src)) };
     } catch { /* phash is advisory; status recomputes from normalized images */ }
-    const gate = sourceResolutionGate(q.width, cfg.quality.minSourceWidth, { draft: args.draft });
+    const gate = sourceResolutionGate(q.width, cfg.quality.minSourceWidth, { draft: !isFinal });
     resolutionByScene[m.scene] = gate;
     if (gate.warning) {
       warningsByScene[m.scene] = [...(warningsByScene[m.scene] || []), gate.warning];
@@ -198,15 +204,52 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
     graph.log(`  scene ${m.scene}: SOURCE ${q.width}x${q.height} ${q.pixFmt}${warns.length ? ` [${warns.join('; ')}]` : ''}`);
   }
 
-  // Wrap the existing normalizer. Force allows provisional license for dry runs.
+  // Round 13 item 3: collect draft warnings / final blockers BEFORE writing.
+  const processedSources = result.mapped
+    .filter((m) => !only || only === m.scene)
+    .map((m) => ({ scene: m.scene, ...(sourceByScene[m.scene] || {}) }));
+  const findings = buildGateFindings({
+    sources: processedSources, licenseUrl, minSourceWidth: cfg.quality.minSourceWidth,
+  });
+  const duplicateRecords = result.mapped
+    .filter((m) => !only || only === m.scene)
+    .map((m) => ({
+      scene: m.scene,
+      exactHash: hashByScene[m.scene]?.sourceSha256 || null,
+      phash: hashByScene[m.scene]?.phash || null,
+    }));
+  const dupGroups = groupDuplicates(duplicateRecords);
+  findings.push(...duplicateFindings(dupGroups));
+
+  if (isFinal) {
+    const blockers = [];
+    if (!licenseUrl) blockers.push('licenseTermsUrl is empty');
+    const low = processedSources.filter((s) => !(s.sourceWidth >= cfg.quality.minSourceWidth));
+    if (low.length) blockers.push(`${low.length} scene(s) with source < ${cfg.quality.minSourceWidth}px (scenes ${low.map((s) => s.scene).join(',')})`);
+    if (dupGroups.length) blockers.push(`${dupGroups.length} duplicate group(s): ${dupGroups.map((g) => g.map((r) => r.scene).join('=')).join('; ')}`);
+    if (blockers.length) {
+      throw new Error(`FINAL ingest blocked (no --force, no exceptions):\n  - ${blockers.join('\n  - ')}\nFIX: regenerate distinct, larger images and run: node scripts/film.mjs review --license-url <url>. Drafts: --profile draft.`);
+    }
+  }
+
+  if (findings.length) {
+    console.log(`\nWARNINGS (${profile} profile) — grouped; --verbose for the full per-scene list:`);
+    for (const line of summarizeFindings(findings, { verbose })) console.log(`  ${line}`);
+    if (isFinal) console.log('  (none of these warn-only items were skipped in final: they are all pass/fail checked above.)');
+  } else {
+    console.log(`\n${profile}: no warnings.`);
+  }
+
+  // Wrap the existing normalizer. Draft may omit the provisional license URL;
+  // final never reaches here without it (blocked above).
   const intakeArgs = ['scripts/intake-illustrations.mjs', staging,
     '--tool', cfg.intake.tool, '--prompt-file', cfg.intake.promptFile];
   if (cfg.intake.licenseTermsUrl) intakeArgs.push('--license-terms-url', cfg.intake.licenseTermsUrl);
-  else if (force) {
+  else if (!isFinal) {
     intakeArgs.push('--allow-missing-fields');
-    graph.log('  WARN: --force with empty licenseTermsUrl — provisional license, NOT releasable');
+    graph.log('  WARN: draft profile with empty licenseTermsUrl — provisional license, NOT releasable');
   } else {
-    throw new Error(`intake licenseTermsUrl is empty in film.config.json. FIX: set intake.licenseTermsUrl to the tool's license URL (or pass --force for a provisional dry run).`);
+    throw new Error(`intake licenseTermsUrl is empty in film.config.json. FIX: set intake.licenseTermsUrl to the tool's license URL (or pass --profile draft for a provisional run).`);
   }
   graph.log('  wrapping: node ' + intakeArgs.join(' '));
   execFileSync('node', intakeArgs, { cwd: root, stdio: 'inherit' });
@@ -235,7 +278,8 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose }) {
       e.qualityWarnings = warningsByScene[e.scene] || [];
       e.reviewed = false;
     }
-    man.factory = { story: cfg.story, ingested: new Date().toISOString(), provisionalLicense: !cfg.intake.licenseTermsUrl };
+    man.profile = profile;
+    man.factory = { story: cfg.story, profile, ingested: new Date().toISOString(), provisionalLicense: !cfg.intake.licenseTermsUrl };
     fs.writeFileSync(manifestPath, JSON.stringify(man, null, 2) + '\n', 'utf8');
   }
   // Round 13 item 2: exactly one summary line after a successful ingest.

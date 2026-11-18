@@ -65,7 +65,7 @@ Known defect: characters still seen from behind in the wide shots (fixed in Phas
 
 ### Phase 5 — Quality and performance (commit a2891e6)
 - `--draft` (720p via root scale transform, shadow 2048→512, normal/bump maps
-  dropped in Angkor set, DoF/vignette/dust skipped) → `out/<story>-draft.mp4`.
+  dropped in Angkor set, DoF/vignette/dust skipped) → `out/<story>-DRAFT-NOT-RELEASABLE.mp4`.
 - Bundle reuse `scripts/lib/bundle-cache.mjs` (sha256 of staged inputs +
   `public/`), wired into make/still — rebuilds only on real change.
 - Concurrency cap 8→4 tabs; VM had only **3.64 GB free RAM**, tabs OOM-died

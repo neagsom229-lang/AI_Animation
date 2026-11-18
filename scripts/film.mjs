@@ -25,13 +25,14 @@ import { computeStatus } from './lib/film-status.mjs';
 import { buildIllustratedTimeline } from '../remotion/lib/illustrated-timing.ts';
 import { costGuard } from './lib/film-cost.mjs';
 import { voicePython } from './lib/film-env.mjs';
+import { profileForCommand, PROFILE_FINAL } from './lib/film-profile.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const COMMANDS = ['setup', 'status', 'doctor', 'estimate', 'ingest', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
 
 /** Parse CLI args. Throws on unknown command/flag with exact usage. */
 export function parseArgs(argv) {
-  const a = { command: null, story: null, only: null, force: false, draft: false, strict: false, verbose: false, allowMissing: false, depthMode: null };
+  const a = { command: null, story: null, only: null, force: false, draft: false, strict: false, verbose: false, allowMissing: false, depthMode: null, profile: null };
   const rest = [...argv];
   if (rest.length && !rest[0].startsWith('-')) a.command = rest.shift();
   for (let i = 0; i < rest.length; i += 1) {
@@ -43,6 +44,15 @@ export function parseArgs(argv) {
       if (!m) throw new Error(`--only needs a scene number (got "${v}"). Fix: --only scene=3`);
       a.only = Number(m[1]);
     } else if (x.startsWith('--only=')) a.only = Number(x.split('=')[1].match(/\d+/)?.[1] || 0);
+    else if (x === '--profile' && rest[i + 1]) {
+      const v = String(rest[++i]).toLowerCase();
+      if (!['draft', 'final'].includes(v)) throw new Error(`--profile must be draft or final (got "${v}")`);
+      a.profile = v;
+    } else if (x.startsWith('--profile=')) {
+      const v = x.split('=')[1].toLowerCase();
+      if (!['draft', 'final'].includes(v)) throw new Error(`--profile must be draft or final (got "${v}")`);
+      a.profile = v;
+    }
     else if (x === '--force') a.force = true;
     else if (x === '--draft') a.draft = true;
     else if (x === '--strict') a.strict = true;
@@ -53,8 +63,9 @@ export function parseArgs(argv) {
       if (!['model', 'gradient'].includes(a.depthMode)) throw new Error('--depth must be model or gradient');
     }
     else if (x === '--help' || x === '-h') a.help = true;
-    else throw new Error(`Unknown argument: ${x}. Usage: node scripts/film.mjs <${COMMANDS.join('|')}> [--story ...] [--only scene=N] [--force] [--draft] [--strict] [--verbose]`);
+    else throw new Error(`Unknown argument: ${x}. Usage: node scripts/film.mjs <${COMMANDS.join('|')}> [--story ...] [--profile draft|final] [--only scene=N] [--force] [--draft] [--strict] [--verbose]`);
   }
+  if (a.profile === 'final' && a.draft) throw new Error('--draft conflicts with --profile final (draft is the default profile, final has no draft output).');
   if (!a.command && !a.help) throw new Error(`Command required. Usage: node scripts/film.mjs <${COMMANDS.join('|')}>`);
   if (a.command && !COMMANDS.includes(a.command)) throw new Error(`Unknown command "${a.command}". Valid: ${COMMANDS.join(', ')}`);
   return a;
@@ -137,14 +148,18 @@ export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (args.help) {
     console.log(`Film factory commands: ${COMMANDS.join(', ')}`);
-    console.log('Flags: --story <path> --only scene=N --force --draft --strict --verbose');
+    console.log('Flags: --story <path> --profile draft|final --only scene=N --force --draft --strict --verbose');
     return 0;
   }
   const cfg = loadConfig(ROOT);
   if (args.story) cfg.story = args.story;
+  const profile = profileForCommand(args.command, args.profile);
+  if (profile === PROFILE_FINAL && args.force) {
+    throw new Error('--profile final has no --force escape hatch. Fix the blockers or use --profile draft (default).');
+  }
   const ch = configHash(cfg);
   const graph = new StageGraph({ root: ROOT, cfg, configHashValue: ch, logPrefix: args.command });
-  graph.log(`film ${args.command} config=${ch} story=${cfg.story}`);
+  graph.log(`film ${args.command} config=${ch} story=${cfg.story}${profile ? ` profile=${profile}` : ''}`);
   try {
     const { ingest } = await import('./lib/film-ingest.mjs');
     const { preview } = await import('./lib/film-preview-stage.mjs');
@@ -161,7 +176,8 @@ export async function main(argv = process.argv.slice(2)) {
         break;
       case 'doctor': {
         const { main: doctorMain } = await import('./film-doctor.mjs');
-        code = await doctorMain([...(args.story ? ['--story', args.story] : []), ...(args.allowMissing ? ['--allow-missing'] : [])]);
+        const doctorProfile = args.profile || 'final';
+        code = await doctorMain([...(args.story ? ['--story', args.story] : []), '--profile', doctorProfile, ...(args.allowMissing ? ['--allow-missing'] : [])]);
         break;
       }
       case 'estimate': {
@@ -170,12 +186,12 @@ export async function main(argv = process.argv.slice(2)) {
         break;
       }
       case 'ingest':
-        await ingest({ cfg, args, graph, data, force: args.force, only: args.only, verbose: args.verbose });
+        await ingest({ cfg, args, graph, data, force: args.force, only: args.only, verbose: args.verbose, profile });
         code = 0;
         break;
       case 'depth': {
         const { runDepth } = await import('./lib/film-depth.mjs');
-        runDepth({ cfg, args, graph, root: ROOT });
+        runDepth({ cfg, args, graph, root: ROOT, profile });
         code = 0;
         break;
       }
@@ -198,11 +214,13 @@ export async function main(argv = process.argv.slice(2)) {
         await preview({ cfg, args, graph, data, force: args.force, only: args.only });
         code = 0;
         break;
-      case 'render':
+      case 'render': {
+        const isFinal = profile === PROFILE_FINAL;
         runCmd('node', ['scripts/make.mjs', '--story', cfg.story, '--style', 'illustrated',
-          '--min-duration', '120', ...(args.draft ? ['--draft'] : []), ...(args.force ? ['--force'] : [])],
-          { verbose: args.verbose, label: 'render', fix: 'Run film status; fix all reasons; ensure assets are in assets-src/illustrations' });
+          '--min-duration', '120', ...(isFinal ? [] : ['--draft'])],
+          { verbose: args.verbose, label: 'render', fix: 'Run film next; fix the ONE action it prints. Draft is the default profile; final: --profile final' });
         break;
+      }
       case 'publish':
         runCmd('node', ['scripts/publish-pack.mjs', '--story', cfg.story],
           { verbose: args.verbose, label: 'publish', fix: 'Run film render first to produce out/<story>.mp4' });

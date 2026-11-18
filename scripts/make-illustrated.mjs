@@ -32,6 +32,7 @@ import { illustratedSceneHash } from './lib/illustrated-scene-cache.mjs';
 import { stitchScenes } from './render-scenes.mjs';
 import { pickContactFrames, tileContactSheet } from './lib/contact-sheet.mjs';
 import { voicePython } from './lib/film-env.mjs';
+import { manifestCanSatisfyFinal, classifyAspect } from './lib/film-profile.mjs';
 import {
   runPreflight, formatPreflight, snapshotChromePids, reapNewRemotionChrome, DEFAULT_CONCURRENCY,
 } from './preflight.mjs';
@@ -105,6 +106,7 @@ function stageAssets(story, report) {
 
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
+  if (args.draft) console.log('DRAFT - NOT RELEASABLE (720p iteration; relaxed gates; labelled output)');
   const story = JSON.parse(fs.readFileSync(args.story, 'utf8'));
   validateIllustratedStory(story);
   console.log('[Assert] Illustrated story schema valid.');
@@ -113,10 +115,11 @@ export async function main(argv = process.argv.slice(2)) {
   const report = checkIllustratedAssets(story, { allowMissing: args.allowMissing });
   for (const line of formatManifest(report)) console.log(line);
 
-  // Intake manifest gate: real renders require a reviewed, fully-logged manifest.
-  // --allow-missing is the explicit escape hatch for fixture/dry runs.
+  // Intake manifest gate: FINAL renders require a reviewed, fully-logged
+  // manifest. --draft (default profile) and --allow-missing relax it — the
+  // draft output is labelled NOT RELEASABLE.
   const intakeManifestPath = path.join(ROOT, 'assets-src/illustrations/manifest.json');
-  if (!args.allowMissing) {
+  if (!args.allowMissing && !args.draft) {
     if (!fs.existsSync(intakeManifestPath)) {
       throw new Error(
         `Missing ${intakeManifestPath}. Run: node scripts/intake-illustrations.mjs <folder> ` +
@@ -146,14 +149,17 @@ export async function main(argv = process.argv.slice(2)) {
     }
     console.log(`[Assert] Source-resolution gate OK (>= ${minSrc}px or draft).`);
 
-    // Round 12 item 3: aspect gate — WARNING with crop percentage (not a blocker).
-    const offAspect = (im.scenes || []).filter((e) =>
-      e.sourceAspect !== undefined && Math.abs(e.sourceAspect - 16 / 9) / (16 / 9) > 0.02);
+    // Round 12 item 3 / Round 13 item 3: aspect gate — NOTE within 16:9 ±5%,
+    // WARNING beyond that with the exact crop percentage (never a blocker).
+    const offAspect = (im.scenes || []).filter((e) => e.sourceWidth !== undefined)
+      .map((e) => ({ e, a: classifyAspect(e.sourceWidth, e.sourceHeight) }))
+      .filter((x) => x.a.level !== 'ok');
     if (offAspect.length) {
-      for (const e of offAspect.slice(0, 6)) {
-        console.log(`[WARN] aspect: scene ${e.scene} source ${e.sourceAspect} not 16:9 ±2% — crops ${e.aspectCropPercent}% ${e.aspectCropAxis} (quality unverified).`);
+      for (const { e, a } of offAspect.slice(0, 6)) {
+        const tag = a.level === 'warn' ? 'WARN' : 'NOTE';
+        console.log(`[${tag}] aspect gate: scene ${e.scene} source ${a.aspect} (${a.deviationPercent}% from 16:9) — crops ${e.aspectCropPercent}% ${e.aspectCropAxis} (quality unverified).`);
       }
-      if (offAspect.length > 6) console.log(`[WARN] aspect: ...and ${offAspect.length - 6} more scene(s).`);
+      if (offAspect.length > 6) console.log(`[NOTE] aspect gate: ...and ${offAspect.length - 6} more scene(s).`);
     } else {
       console.log('[Assert] Aspect gate OK (all sources 16:9 ±2%).');
     }
@@ -167,8 +173,18 @@ export async function main(argv = process.argv.slice(2)) {
       throw new Error(`FINAL RENDER BLOCKED: ${dupGroups.length} duplicate group(s):\n  ${dupGroups.map(requeueBlock).join('\n\n')}`);
     }
     console.log('[Assert] Duplicate check OK (no exact/near-duplicate scenes).');
+
+    // Round 13 item 3: a draft-profile ingest can never satisfy final.
+    if (!manifestCanSatisfyFinal(im)) {
+      throw new Error(
+        `FINAL RENDER BLOCKED: manifest profile=${im.factory?.profile || im.profile || 'missing (legacy = draft)'}. ` +
+        `A draft ingest can never satisfy a final render. FIX: node scripts/film.mjs ingest --profile final ` +
+        `(after the license URL, >=1600 px sources and distinct images are in place).`
+      );
+    }
+    console.log('[Assert] Ingest profile is final.');
   } else {
-    console.log('[warn] --allow-missing: intake manifest review + source/duplicate gates skipped (fixture/dry run).');
+    console.log("[warn] draft/--allow-missing: intake manifest review + source/duplicate/profile gates relaxed (output is DRAFT - NOT RELEASABLE).");
   }
   stageAssets(story, report);
 
@@ -310,7 +326,7 @@ export async function main(argv = process.argv.slice(2)) {
     console.log(`[resume] found state file with ${Object.keys(resumeState.finished).length} finished scene(s).`);
   }
   const saveState = () => fs.writeFileSync(stateFile, JSON.stringify(resumeState, null, 2) + '\n', 'utf8');
-  const outFile = path.resolve(ROOT, `out/${storyName}${args.draft ? '-draft' : ''}${args.vertical ? '-vertical' : ''}.mp4`);
+  const outFile = path.resolve(ROOT, `out/${storyName}${args.draft ? '-DRAFT-NOT-RELEASABLE' : ''}${args.vertical ? '-vertical' : ''}.mp4`);
   const sceneFiles = [];
   let rendered = 0;
   let cached = 0;

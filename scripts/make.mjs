@@ -31,7 +31,7 @@
  *
  * Flow: story JSON -> edge-tts voice (or --mock) -> voice.json (real durations
  * + 20 Hz envelopes) -> Remotion render -> out/<story>.mp4 + contact sheet.
- * --draft renders 720p to out/<story>-draft.mp4 (+ <story>-draft-contact.png)
+ * --draft renders 720p to out/<story>-DRAFT-NOT-RELEASABLE.mp4 (+ <story>-DRAFT-NOT-RELEASABLE-contact.png)
  * so it never clobbers the shipped 1080p artifact.
  * There is NO automatic mock fallback: if real TTS fails, the script exits 1.
  */
@@ -119,6 +119,7 @@ async function main() {
   const voice = args.voice || (lang === 'en' ? 'en-US-AriaNeural' : 'km-KH-PisethNeural');
 
   console.log(`[Kuanimation Studio] Making film from story: ${storyPath} (lang: ${lang}, voice: ${voice}, mock: ${mock}, draft: ${args.draft})`);
+  if (args.draft) console.log('DRAFT - NOT RELEASABLE (relaxed gates; labelled output)');
 
   // Style dispatch: --style illustrated, or auto-detect the illustrated schema.
   // The 3D style remains the default for all existing stories.
@@ -276,7 +277,7 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   // Draft renders go to <story>-draft.mp4 so they never clobber the shipped
   // final render at <story>.mp4 (the draft's purpose is a fast iteration loop).
-  const outSuffix = mock ? '-MOCK.mp4' : args.draft ? '-draft.mp4' : '.mp4';
+  const outSuffix = mock ? '-MOCK.mp4' : args.draft ? '-DRAFT-NOT-RELEASABLE.mp4' : '.mp4';
   const outVideoPath = path.join(outDir, `${storyName}${outSuffix}`);
 
   const renderStart = Date.now();

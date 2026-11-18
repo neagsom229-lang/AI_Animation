@@ -3,7 +3,7 @@
 Artifacts inspected (all rendered with **mock voice + `--allow-missing`** because
 no illustrations / real voice are present on this branch yet):
 
-- `out/khmer-empire-draft.mp4` — 18-scene draft film, 143.8 s, 1280×720, h264+aac.
+- `out/khmer-empire-DRAFT-NOT-RELEASABLE.mp4` — 18-scene draft film, 143.8 s, 1280×720, h264+aac (older runs wrote `out/khmer-empire-draft.mp4`).
 - `out/khmer-empire-storyboard/contact.png` — 18-scene contact sheet.
 - `out/khmer-empire-storyboard/storyboard-animatic.mp4` — 2:13 slideshow + mock voice.
 - `out/review/motion-strip-round5-plain.png` etc. are from the 3D style (unchanged).

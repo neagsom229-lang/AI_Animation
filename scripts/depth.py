@@ -400,6 +400,8 @@ def main():
     p = argparse.ArgumentParser(description="Generate 16-bit depth maps for illustrated scenes.")
     p.add_argument("--story", default="src/stories/khmer-empire.json")
     p.add_argument("--depth", choices=["model", "gradient"], default="model")
+    p.add_argument("--profile", choices=["draft", "final"], default="draft",
+                   help="draft (default) labels the output NOT releasable; final keeps every gate")
     p.add_argument("--allow-missing", action="store_true")
     p.add_argument("--force", action="store_true", help="recompute depth even when the cache key matches")
     p.add_argument("--layers", action="store_true", help="also write fg/mid/bg masks (OpenCV)")
@@ -429,7 +431,7 @@ def main():
     made = 0
     missing = 0
     cached = 0
-    metrics = {"version": 1, "depthMode": args.depth, "scenes": []}
+    metrics = {"version": 1, "depthMode": args.depth, "profile": args.profile, "scenes": []}
     review_dir = os.path.join("out", "review")
     os.makedirs(review_dir, exist_ok=True)
     metrics_path = os.path.join(review_dir, "parallax-metrics.json")

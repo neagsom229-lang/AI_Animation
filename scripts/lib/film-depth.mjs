@@ -107,16 +107,17 @@ export function prepareModelInterpreter(root, { install = true } = {}) {
 }
 
 /** The depth stage runner (called from film.mjs). */
-export function runDepth({ cfg, args, graph, root = process.cwd() }) {
+export function runDepth({ cfg, args, graph, root = process.cwd(), profile = 'draft' }) {
   const mode = args.depthMode || cfg.depth.mode;
+  graph.log(`depth: profile=${profile}${profile === 'final' ? ' (final render gates unchanged)' : ' (draft output is NOT releasable)'}`);
   if (mode === 'gradient') {
     graph.log('depth: --depth gradient (explicit labeled fallback, no model)');
     const py = venvPython(root);
     if (!fs.existsSync(py)) {
       graph.log(`depth: WARN ${path.basename(path.dirname(path.dirname(py)))} missing — using legacy 'python' (deprecated). Run: node scripts/film.mjs setup`);
-      return spawnDepth('python', [], root, cfg, graph, mode, args);
+      return spawnDepth('python', [], root, cfg, graph, mode, args, profile);
     }
-    return spawnDepth(py, [], root, cfg, graph, mode, args);
+    return spawnDepth(py, [], root, cfg, graph, mode, args, profile);
   }
   // Model mode — ensure a torch-capable interpreter.
   const prep = prepareModelInterpreter(root);
@@ -126,11 +127,11 @@ export function runDepth({ cfg, args, graph, root = process.cwd() }) {
     throw new Error(`Depth model unavailable: ${prep.error}. Exact manual steps printed above. Gradient fallback requires: node scripts/film.mjs depth --depth gradient`);
   }
   if (prep.createdVenv) graph.log(`depth: created .venv-depth with ${prep.interp.label}`);
-  return spawnDepth(prep.interp.cmd, prep.interp.prefix, root, cfg, graph, mode, args);
+  return spawnDepth(prep.interp.cmd, prep.interp.prefix, root, cfg, graph, mode, args, profile);
 }
 
-function spawnDepth(cmd, prefix, root, cfg, graph, mode, args) {
-  const dArgs = [...prefix, 'scripts/depth.py', '--story', cfg.story, '--depth', mode];
+function spawnDepth(cmd, prefix, root, cfg, graph, mode, args, profile = 'draft') {
+  const dArgs = [...prefix, 'scripts/depth.py', '--story', cfg.story, '--depth', mode, '--profile', profile];
   if (args.allowMissing) dArgs.push('--allow-missing');
   if (args.force) dArgs.push('--force');
   graph.log(`depth: $ ${cmd} ${dArgs.join(' ')}`);

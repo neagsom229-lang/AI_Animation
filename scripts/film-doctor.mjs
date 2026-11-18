@@ -19,18 +19,23 @@ import { probeEnvironment } from './lib/film-env.mjs';
 const ROOT = process.cwd();
 
 function parseArgs(argv) {
-  const a = { story: null, allowMissing: false };
+  const a = { story: null, allowMissing: false, profile: 'final' };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--story' && argv[i + 1]) a.story = argv[++i];
     else if (argv[i] === '--allow-missing') a.allowMissing = true;
-    else throw new Error(`Unknown: ${argv[i]}`);
+    else if (argv[i] === '--profile' && argv[i + 1]) {
+      const v = String(argv[++i]).toLowerCase();
+      if (!['draft', 'final'].includes(v)) throw new Error('--profile must be draft or final');
+      a.profile = v;
+    } else throw new Error(`Unknown: ${argv[i]}`);
   }
   return a;
 }
 
 /** A gate result: {name, status:'PASS'|'BLOCK'|'SKIP', detail, fix}. */
-export function runGates({ cfg, story, allowMissing = false }) {
+export function runGates({ cfg, story, allowMissing = false, profile = 'final' }) {
   const gates = [];
+  const draft = profile === 'draft' || allowMissing;
   const add = (name, status, detail, fix = '') => gates.push({ name, status, detail, fix });
   const illDir = path.resolve(ROOT, cfg.paths.illustrations);
   const manifestPath = path.join(illDir, 'manifest.json');
@@ -46,13 +51,13 @@ export function runGates({ cfg, story, allowMissing = false }) {
     const missingIll = report.scenes.filter((s) => s.missing.length > 0);
     if (!allowMissing && missingIll.length) {
       add('ingest', 'BLOCK', `${missingIll.length} scene(s) missing assets`,
-        'node scripts/film.mjs ingest --force (after copying images into assets-src/inbox/)');
+        'Copy images into assets-src/inbox/, then: node scripts/film.mjs ingest');
       return gates; // stop at first blocker
     }
     add('ingest', allowMissing && missingIll.length ? 'SKIP' : 'PASS',
       allowMissing && missingIll.length ? `${missingIll.length} missing (--allow-missing)` : `${report.scenes.length} scenes present`);
   } catch (e) {
-    add('ingest', 'BLOCK', e.message.slice(0, 100), 'node scripts/film.mjs ingest --force');
+    add('ingest', 'BLOCK', e.message.slice(0, 100), 'Copy images into assets-src/inbox/, then: node scripts/film.mjs ingest');
     return gates;
   }
 
@@ -62,11 +67,11 @@ export function runGates({ cfg, story, allowMissing = false }) {
   const records = buildImageRecords({ story, promptsDoc: promptText, root: ROOT });
   const groups = groupDuplicates(records);
   if (groups.length) {
-    // Final render blocks; drafts (--allow-missing) only warn and continue.
-    add('duplicates', allowMissing ? 'SKIP' : 'BLOCK',
-      `${groups.length} duplicate group(s): ${groups.map((g) => g.map((r) => r.scene).join('=')).join('; ')}${allowMissing ? ' (draft: warn only)' : ''}`,
+    // Final render blocks; drafts (draft profile / --allow-missing) warn only.
+    add('duplicates', draft ? 'SKIP' : 'BLOCK',
+      `${groups.length} duplicate group(s): ${groups.map((g) => g.map((r) => r.scene).join('=')).join('; ')}${draft ? ' (draft: warn only)' : ''}`,
       `Regenerate distinct images. ${inlineRequeueHint(groups)}\nFull requeue (narration + prompt):\n${groups.map(requeueBlock).join('\n\n')}`);
-    if (!allowMissing) return gates; // stop at first blocker
+    if (!draft) return gates; // stop at first blocker
   } else {
     add('duplicates', 'PASS', `${records.length} unique image(s)`);
   }
@@ -74,27 +79,28 @@ export function runGates({ cfg, story, allowMissing = false }) {
   // 3) resolution (SOURCE width, never resized copy).
   if (fs.existsSync(manifestPath)) {
     const man = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    // Count against the FINAL threshold; the profile decides block vs skip.
     const low = (man.scenes || []).filter((e) => e.sourceWidth !== undefined &&
-      sourceResolutionGate(e.sourceWidth, cfg.quality.minSourceWidth, { draft: allowMissing }).hardFail);
-    if (low.length && !allowMissing) {
+      sourceResolutionGate(e.sourceWidth, cfg.quality.minSourceWidth, { draft: false }).hardFail);
+    if (low.length && !draft) {
       add('resolution', 'BLOCK', `${low.length} scene(s) source < ${cfg.quality.minSourceWidth}px`,
         'node scripts/film.mjs upscale --scene N (Real-ESRGAN BSD-3) or regenerate larger sources');
       return gates;
     }
-    add('resolution', low.length ? 'SKIP' : 'PASS', low.length ? `${low.length} low (--allow-missing)` : `all >= ${cfg.quality.minSourceWidth}px`);
+    add('resolution', low.length ? 'SKIP' : 'PASS', low.length ? `${low.length} scene(s) source < ${cfg.quality.minSourceWidth}px (draft: warn only)` : `all >= ${cfg.quality.minSourceWidth}px`);
 
     // 4) manual review.
     const bad = (man.scenes || []).filter((e) => !isManifestEntryReady(e));
-    if (bad.length && !allowMissing) {
+    if (bad.length && !draft) {
       add('manual-review', 'BLOCK', `${bad.length} scene(s) incomplete: ${bad.slice(0, 2).map((e) =>
         `scene ${e.scene} missing [${[...REQUIRED_MANIFEST_FIELDS, ...REQUIRED_MANIFEST_FLAGS].filter((k) =>
           e[k] !== true && !(typeof e[k] === 'string' && e[k].trim())).join(',')}]`).join('; ')}`,
-        'Review each image (docs/IMAGE_REVIEW_CHECKLIST.md); set reviewed/matchesNarration/watermarkCheck true and fill tool/date/prompt/licenseTermsUrl. NEVER auto-fill.');
+        'Review each image with: node scripts/film.mjs review --scene N --matches-narration yes --watermark clear --reviewed yes (and review --license-url). NEVER auto-fill.');
       return gates;
     }
-    add('manual-review', bad.length ? 'SKIP' : 'PASS', bad.length ? `${bad.length} unreviewed (--allow-missing)` : 'all reviewed');
+    add('manual-review', bad.length ? 'SKIP' : 'PASS', bad.length ? `${bad.length} unreviewed (draft: warn only)` : 'all reviewed');
   } else {
-    add('resolution', 'BLOCK', 'no manifest.json', 'node scripts/film.mjs ingest --force');
+    add('resolution', 'BLOCK', 'no manifest.json', 'node scripts/film.mjs ingest');
     return gates;
   }
 
@@ -140,10 +146,10 @@ export async function main(argv = process.argv.slice(2)) {
   const cfg = loadConfig(ROOT);
   if (args.story) cfg.story = args.story;
   const story = JSON.parse(fs.readFileSync(path.resolve(ROOT, cfg.story), 'utf8'));
-  console.log(`[film doctor] config=${configHash(cfg)} story=${cfg.story}${args.allowMissing ? ' --allow-missing' : ''}`);
+  console.log(`[film doctor] config=${configHash(cfg)} story=${cfg.story} profile=${args.profile}${args.allowMissing ? ' --allow-missing' : ''}`);
   const envProbe = probeEnvironment(ROOT);
   for (const w of envProbe.warnings || []) console.log(`[WARN] ${w}`);
-  const gates = runGates({ cfg, story, allowMissing: args.allowMissing });
+  const gates = runGates({ cfg, story, allowMissing: args.allowMissing, profile: args.profile });
 
   console.log('\ngate                  status   detail');
   console.log('-'.repeat(96));
