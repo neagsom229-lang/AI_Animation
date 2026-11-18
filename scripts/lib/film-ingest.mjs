@@ -75,17 +75,36 @@ export function backupDirName(ts = new Date()) {
 }
 
 /**
- * Copy (never move/delete) every normalized file that ingest is about to
- * replace into assets-src/backup/<timestamp>/.
+ * Source sha256 values recorded by the LAST ingest, before this run rewrites the
+ * manifest. Used to decide whether an incoming image would actually change the
+ * normalized output. Missing file / legacy manifest -> empty map (back up safely).
+ */
+export function priorSourceHashes(root, cfg) {
+  const p = path.resolve(root, cfg.paths.illustrations, 'manifest.json');
+  if (!fs.existsSync(p)) return new Map();
+  try {
+    const man = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return new Map((man.scenes || [])
+      .filter((e) => e.sourceSha256)
+      .map((e) => [Number(e.scene), e.sourceSha256]));
+  } catch { return new Map(); }
+}
+
+/**
+ * Copy (never move/delete) ONLY the normalized files whose source sha256 differs
+ * from the previous ingest. Unchanged sources create NO folder and NO copy.
  * @returns {{dir: string, files: string[]}}
  */
-export function backupReplaced({ root, cfg, mappedScenes }) {
+export function backupReplaced({ root, cfg, mappedScenes, sourceHashes = new Map(), priorSha = new Map() }) {
   const stamp = backupDirName();
   const dir = path.join(path.resolve(root, 'assets-src', 'backup'), stamp);
   const files = [];
   for (const scene of mappedScenes) {
     const dest = path.resolve(root, cfg.paths.illustrations, targetDestName(scene));
-    if (!fs.existsSync(dest)) continue;
+    if (!fs.existsSync(dest)) continue; // nothing to preserve for a new scene
+    const incoming = sourceHashes.get(scene);
+    const previous = priorSha.get(scene);
+    if (!incoming || (previous && previous === incoming)) continue; // unchanged -> no backup
     fs.mkdirSync(dir, { recursive: true });
     const copy = path.join(dir, path.basename(dest));
     fs.copyFileSync(dest, copy);
@@ -113,6 +132,7 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose, pro
   const isFinal = profile === PROFILE_FINAL;
   const probeCache = loadCache(root);
   const probeStats = newStats();
+  const priorSha = priorSourceHashes(root, cfg); // before intake rewrites the manifest
   fs.mkdirSync(inbox, { recursive: true });
   fs.mkdirSync(originals, { recursive: true });
   fs.mkdirSync(staging, { recursive: true });
@@ -158,11 +178,14 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose, pro
   // timestamped backup BEFORE any write. Never move, never delete.
   const processedScenes = result.mapped.filter((m) => !only || only === m.scene).map((m) => m.scene);
   const beforeHashes = new Map();
-  for (const scene of processedScenes) {
-    const dest = path.resolve(root, cfg.paths.illustrations, targetDestName(scene));
-    beforeHashes.set(scene, fs.existsSync(dest) ? fileSha(dest) : null);
+  const sourceHashes = new Map();
+  for (const m of result.mapped) {
+    if (only && only !== m.scene) continue;
+    const dest = path.resolve(root, cfg.paths.illustrations, targetDestName(m.scene));
+    beforeHashes.set(m.scene, fs.existsSync(dest) ? fileSha(dest) : null);
+    sourceHashes.set(m.scene, fileSha(path.join(drop.dir, m.file)));
   }
-  const backup = backupReplaced({ root, cfg, mappedScenes: processedScenes });
+  const backup = backupReplaced({ root, cfg, mappedScenes: processedScenes, sourceHashes, priorSha });
   if (backup.files.length) graph.log(`ingest: backed up ${backup.files.length} replaced file(s) -> ${path.relative(root, backup.dir).replace(/\\/g, '/')}`);
 
   // Keep originals + stage renamed copies for the existing intake wrapper.

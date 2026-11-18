@@ -69,7 +69,8 @@ test('backups go to a timestamped folder and never move/delete the original', ()
   const dest = path.join(ill, 'scene-03.png');
   fs.writeFileSync(dest, 'OLD-BYTES');
   const cfg = { paths: { illustrations: 'assets-src/illustrations' } };
-  const b = backupReplaced({ root, cfg, mappedScenes: [3, 4] });
+  const b = backupReplaced({ root, cfg, mappedScenes: [3, 4],
+    sourceHashes: new Map([[3, 'NEW-BYTES']]), priorSha: new Map([[3, 'OLD-BYTES']]) });
   assert.deepEqual(b.files, ['scene-03.png']);
   assert.ok(b.dir.includes('assets-src') && b.dir.includes('backup'));
   assert.equal(fs.readFileSync(path.join(b.dir, 'scene-03.png'), 'utf8'), 'OLD-BYTES');
