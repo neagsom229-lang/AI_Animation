@@ -12,9 +12,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, configHash } from './lib/film-config.mjs';
 import { checkIllustratedAssets } from './illustrated-manifest.mjs';
-import { buildImageRecords, groupDuplicates, requeueBlock, inlineRequeueHint, requeueTargets } from './lib/film-duplicates.mjs';
+import { buildImageRecords, groupDuplicates, requeuePlan } from './lib/film-duplicates.mjs';
 import { isManifestEntryReady, REQUIRED_MANIFEST_FIELDS, REQUIRED_MANIFEST_FLAGS, sourceResolutionGate } from './lib/image-check.mjs';
 import { probeEnvironment } from './lib/film-env.mjs';
+import { cachedPhash, loadCache, saveCache, pruneCache, newStats, cacheReport } from './lib/probe-cache.mjs';
 
 const ROOT = process.cwd();
 
@@ -61,16 +62,23 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final' }
     return gates;
   }
 
-  // 2) duplicates (exact + near).
+  // 2) duplicates (exact + near), pHash results cached by (path, mtime, size).
   const promptText = fs.existsSync(path.resolve(ROOT, cfg.intake.promptFile))
     ? fs.readFileSync(path.resolve(ROOT, cfg.intake.promptFile), 'utf8') : '';
-  const records = buildImageRecords({ story, promptsDoc: promptText, root: ROOT });
+  const probeCache = loadCache(ROOT);
+  const probeStats = newStats();
+  const records = buildImageRecords({
+    story, promptsDoc: promptText, root: ROOT,
+    phashFn: (file) => cachedPhash(file, { root: ROOT, cache: probeCache, stats: probeStats }),
+  });
+  saveCache(pruneCache(probeCache, ROOT), ROOT);
+  gates.probeCache = cacheReport(probeStats);
   const groups = groupDuplicates(records);
   if (groups.length) {
     // Final render blocks; drafts (draft profile / --allow-missing) warn only.
     add('duplicates', draft ? 'SKIP' : 'BLOCK',
       `${groups.length} duplicate group(s): ${groups.map((g) => g.map((r) => r.scene).join('=')).join('; ')}${draft ? ' (draft: warn only)' : ''}`,
-      `Regenerate distinct images. ${inlineRequeueHint(groups)}\nFull requeue (narration + prompt):\n${groups.map(requeueBlock).join('\n\n')}`);
+      `Regenerate distinct images, then: node scripts/film.mjs ingest\n${requeuePlan(groups)}`);
     if (!draft) return gates; // stop at first blocker
   } else {
     add('duplicates', 'PASS', `${records.length} unique image(s)`);
@@ -158,6 +166,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (g.fix) console.log(`  FIX: ${g.fix.split('\n')[0]}`);
   }
   console.log('-'.repeat(96));
+  if (gates.probeCache) console.log(gates.probeCache);
   const blocker = gates.find((g) => g.status === 'BLOCK');
   if (blocker) {
     console.error(`\nFILM DOCTOR: BLOCKED at "${blocker.name}". Fix:\n${blocker.fix}`);

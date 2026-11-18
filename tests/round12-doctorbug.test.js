@@ -25,12 +25,14 @@ test('inlineRequeueHint: non-empty, lists only targets, includes narration+promp
   assert.ok(hint.includes('narration="N10"') && hint.includes('prompt="P10"'));
 });
 
-test('doctor FIX line is inline (not empty REQUEUE) in real output', () => {
+test('doctor prints ONE requeue list (scene, filename, target, prompt file)', () => {
   const r = spawnSync(process.execPath, ['scripts/film.mjs', 'doctor'], { encoding: 'utf8' });
   const out = `${r.stdout || ''}${r.stderr || ''}`;
-  const fix = out.split('\n').find((l) => l.includes('FIX: Regenerate distinct images'));
-  assert.ok(fix, 'FIX line must exist');
-  assert.ok(fix.includes('REQUEUE (regenerate only these 6)'), 'FIX line must carry the inline hint');
-  assert.ok(fix.includes('scene 10') && fix.includes('scene 17'));
-  assert.ok(!fix.trimEnd().endsWith('REQUEUE:'), 'must not end in empty REQUEUE:');
+  const headers = out.split('\n').filter((l) => l.includes('REQUEUE (regenerate only these 6)'));
+  assert.equal(headers.length, 1, 'the requeue list must be printed exactly once');
+  assert.match(out, /scene 10 -> save as assets-src\/inbox\/scene-10\.png \| target >= 1920x1080, 16:9 \| prompt: docs\/(prompts\/scene-10\.txt|ILLUSTRATION_PROMPTS\.md)/);
+  assert.match(out, /scene 17 -> save as assets-src\/inbox\/scene-17\.png/);
+  assert.ok(!/scene 9\s+->/.test(out), 'retained scenes must not be requeued');
+  assert.ok(!/scene 11\s+->/.test(out), 'retained scenes must not be requeued');
+  assert.ok(!/scene 15\s+->/.test(out), 'retained scenes must not be requeued');
 });

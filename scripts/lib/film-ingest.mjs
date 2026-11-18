@@ -6,30 +6,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mapFilenames, missingScenes } from './film-map.mjs';
-import { hashInputs } from './film-graph.mjs';
 import { isUpscaled, sourceResolutionGate, aspectCropPercent } from './image-check.mjs';
-import { imageToGray32, perceptualHash, groupDuplicates } from './film-duplicates.mjs';
+import { groupDuplicates } from './film-duplicates.mjs';
 import {
   PROFILE_FINAL, resolveProfile, buildGateFindings, duplicateFindings, summarizeFindings,
 } from './film-profile.mjs';
+import {
+  cachedProbe, cachedPhash, loadCache, saveCache, pruneCache, newStats, cacheReport, runMedia,
+} from './probe-cache.mjs';
 
-/** Probe an image with Remotion ffprobe (returns width/height/pix_fmt). */
+/** Probe an image with the bundled ffprobe (returns width/height/pix_fmt). */
 export function probeImage(file) {
-  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const r = requireSpawn(npx, ['remotion', 'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+  const r = runMedia('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
     '-show_entries', 'stream=width,height,pix_fmt', '-of', 'json', file]);
   try {
-    const j = JSON.parse(r.slice(r.indexOf('{'), r.lastIndexOf('}') + 1));
+    const j = JSON.parse(r.out.slice(r.out.indexOf('{'), r.out.lastIndexOf('}') + 1));
     const s = (j.streams || [])[0] || {};
     return { width: Number(s.width), height: Number(s.height), pixFmt: s.pix_fmt || '' };
   } catch { return { width: NaN, height: NaN, pixFmt: '' }; }
-}
-function requireSpawn(cmd, args) {
-  // eslint-disable-next-line no-undef
-  return execFileSync(cmd, args, { cwd: process.cwd(), encoding: 'utf8', shell: process.platform === 'win32',
-    maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 /** Quality warnings for an image (final render warns; intake normalizes with a logged crop). */
@@ -108,12 +104,15 @@ function fileSha(file) {
 
 /** The ingest stage runner. */
 export async function ingest({ cfg, args, graph, data, force, only, verbose, profile: profileArg }) {
+  const startedAt = Date.now();
   const root = process.cwd();
   const inbox = path.resolve(root, cfg.paths.inbox);
   const originals = path.resolve(root, cfg.paths.originals);
   const staging = path.resolve(root, cfg.paths.build, 'ingest', data.storyName);
   const profile = resolveProfile(profileArg, args.profile || 'draft');
   const isFinal = profile === PROFILE_FINAL;
+  const probeCache = loadCache(root);
+  const probeStats = newStats();
   fs.mkdirSync(inbox, { recursive: true });
   fs.mkdirSync(originals, { recursive: true });
   fs.mkdirSync(staging, { recursive: true });
@@ -170,14 +169,13 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose, pro
   // IMPORTANT: probe the SOURCE (inbox) file, never the resized output.
   const warningsByScene = {};
   const sourceByScene = {};
-  const resolutionByScene = {};
   const hashByScene = {};
   for (const m of result.mapped) {
     if (only && only !== m.scene) continue;
     const src = path.join(drop.dir, m.file);
     const destOrig = path.join(originals, m.file);
     fs.copyFileSync(src, destOrig);
-    const q = probeImage(src);
+    const q = cachedProbe(src, { root, cache: probeCache, stats: probeStats });
     const warns = qualityWarnings(q, cfg);
     if (warns.length) warningsByScene[m.scene] = warns;
     const cropInfo = aspectCropPercent(q.width, q.height);
@@ -188,21 +186,23 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose, pro
       aspectCropAxis: cropInfo.axis,
       upscaled: isUpscaled(q.width, cfg.resolutions.master[0]),
     };
-    // Perceptual hash of the SOURCE image (exact SHA-256 is written by intake on the normalized copy).
+    // Hash the SOURCE image (exact SHA-256 is written by intake on the normalized copy).
     try {
-      hashByScene[m.scene] = { sourceSha256: crypto.createHash('sha256').update(fs.readFileSync(src)).digest('hex'),
-        phash: perceptualHash(imageToGray32(src)) };
-    } catch { /* phash is advisory; status recomputes from normalized images */ }
+      const ph = cachedPhash(src, { root, cache: probeCache, stats: probeStats });
+      hashByScene[m.scene] = { sourceSha256: ph.sha256, phash: ph.phash };
+    } catch (e) {
+      graph.log(`  WARN scene ${m.scene}: perceptual hash unavailable (${e.message.slice(0, 80)}) — duplicate check may miss it`);
+    }
     const gate = sourceResolutionGate(q.width, cfg.quality.minSourceWidth, { draft: !isFinal });
-    resolutionByScene[m.scene] = gate;
     if (gate.warning) {
       warningsByScene[m.scene] = [...(warningsByScene[m.scene] || []), gate.warning];
-      graph.log(`  scene ${m.scene}: SOURCE GATE ${gate.hardFail ? 'BLOCK' : 'WARN'}: ${gate.warning}`);
+      if (verbose) graph.log(`  scene ${m.scene}: SOURCE GATE ${gate.hardFail ? 'BLOCK' : 'WARN'}: ${gate.warning}`);
     }
     const staged = path.join(staging, `scene-${String(m.scene).padStart(2, '0')}.png`);
     fs.copyFileSync(src, staged);
-    graph.log(`  scene ${m.scene}: SOURCE ${q.width}x${q.height} ${q.pixFmt}${warns.length ? ` [${warns.join('; ')}]` : ''}`);
+    if (verbose) graph.log(`  scene ${m.scene}: SOURCE ${q.width}x${q.height} ${q.pixFmt}${warns.length ? ` [${warns.join('; ')}]` : ''}`);
   }
+  saveCache(pruneCache(probeCache, root), root);
 
   // Round 13 item 3: collect draft warnings / final blockers BEFORE writing.
   const processedSources = result.mapped
@@ -252,7 +252,22 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose, pro
     throw new Error(`intake licenseTermsUrl is empty in film.config.json. FIX: set intake.licenseTermsUrl to the tool's license URL (or pass --profile draft for a provisional run).`);
   }
   graph.log('  wrapping: node ' + intakeArgs.join(' '));
-  execFileSync('node', intakeArgs, { cwd: root, stdio: 'inherit' });
+  // Quiet by default: the normalizer prints one line per image. Keep the real
+  // output on failure (or with --verbose) so nothing is hidden.
+  const intakeRun = spawnSync('node', intakeArgs, {
+    cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+  });
+  const intakeOut = `${intakeRun.stdout || ''}${intakeRun.stderr || ''}`;
+  if (intakeRun.status !== 0) {
+    process.stdout.write(intakeOut);
+    throw new Error(`intake-illustrations.mjs failed (exit ${intakeRun.status}); full output above.`);
+  }
+  if (verbose) {
+    process.stdout.write(intakeOut);
+  } else {
+    const summary = intakeOut.split(/\r?\n/).find((l) => l.includes('wrote ') && l.includes('manifest.json'));
+    if (summary) graph.log(`  ${summary.trim()}`);
+  }
 
   // Enrich the produced manifest with factory checklist fields (never hide marks).
   const manifestPath = path.resolve(root, cfg.paths.illustrations, 'manifest.json');
@@ -293,6 +308,9 @@ export async function ingest({ cfg, args, graph, data, force, only, verbose, pro
     else unchanged += 1;
   }
   console.log(`${added} new, ${replaced} replaced, ${unchanged} unchanged`);
+  // Baseline 265.0 s is the measured Round 13 item 2 ingest on this machine
+  // (18 images, per-image `npx remotion` probes) — provenance for the speedup.
+  console.log(cacheReport(probeStats, { elapsedMs: Date.now() - startedAt, baselineMs: 265000 }));
   graph.log(`ingest done. ACTION: review each image (docs/IMAGE_REVIEW_CHECKLIST.md); check watermark vs tool terms; set reviewed:true.`);
   return { mapped: result.mapped.length, unmapped: result.unmapped.length, duplicates: Object.keys(result.duplicates).length, missing, added, replaced, unchanged };
 }

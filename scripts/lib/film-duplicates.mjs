@@ -11,8 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { decodePng } from './png.mjs';
+import { runMedia } from './media-bin.mjs';
 
 /** SHA-256 of a file's bytes (exact-duplicate key). */
 export function exactHash(file) {
@@ -26,12 +26,9 @@ export function exactHash(file) {
 export function imageToGray32(file, size = 32) {
   const tmp = path.join(os.tmpdir(), `kuan-phash-${crypto.randomBytes(6).toString('hex')}.png`);
   try {
-    const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-    execFileSync(npx, ['remotion', 'ffmpeg', '-y', '-v', 'error', '-i', file,
-      '-vf', `scale=${size}:${size},format=gray`, '-frames:v', '1', '-f', 'image2', tmp], {
-      cwd: process.cwd(), encoding: 'utf8', shell: process.platform === 'win32',
-      maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const r = runMedia('ffmpeg', ['-y', '-v', 'error', '-i', file,
+      '-vf', `scale=${size}:${size},format=gray`, '-frames:v', '1', '-f', 'image2', tmp]);
+    if (!r.ok) throw new Error(`ffmpeg failed for ${file}: ${r.out.slice(0, 200)}`);
     const img = decodePng(fs.readFileSync(tmp));
     const gray = [];
     for (let i = 0; i < img.data.length; i += 4) gray.push(img.data[i]); // R=G=B for gray
@@ -41,24 +38,29 @@ export function imageToGray32(file, size = 32) {
   }
 }
 
-/** Build duplicate-detection records for a story from normalized images. */
-export function buildImageRecords({ story, promptsDoc, root = process.cwd() }) {
+/**
+ * Build duplicate-detection records for a story from normalized images.
+ * `phashFn` is injectable (Round 13 item 4 uses the probe cache); the default
+ * recomputes.
+ */
+export function buildImageRecords({ story, promptsDoc, root = process.cwd(), phashFn = null }) {
   const prompts = parsePrompts(promptsDoc, root);
   return (story.scenes || []).filter((s) => s.image).map((s, idx) => {
     const file = path.resolve(root, s.image);
     if (!fs.existsSync(file)) return null;
-    const pixels = imageToGray32(file);
     const num = String(idx + 1).padStart(2, '0'); // fallback; caller can pass scene number
     const sceneNo = Number(String(s.id).match(/\d+/)?.[0] || idx + 1);
     const key = String(sceneNo).padStart(2, '0');
+    const cached = phashFn ? phashFn(file) : null;
+    const pixels = cached ? null : imageToGray32(file);
     return {
       scene: sceneNo,
       sceneId: s.id,
       image: s.image,
       narration: (s.narration && s.narration.en) || '',
       prompt: prompts[key] || prompts[String(sceneNo)] || '',
-      exactHash: exactHash(file),
-      phash: perceptualHash(pixels),
+      exactHash: cached?.sha256 || exactHash(file),
+      phash: cached?.phash || perceptualHash(pixels),
     };
   }).filter(Boolean);
 }
@@ -160,6 +162,29 @@ export function requeueBlock(group) {
     if (r.image) lines.push(`  CURRENT: ${r.image}`);
   }
   lines.push('  ACTION: regenerate a DISTINCT image per scene, then: node scripts/film.mjs ingest');
+  return lines.join('\n');
+}
+
+/**
+ * Round 13 item 4: ONE requeue plan for the doctor output. Each line names the
+ * scene, the exact filename to save, the target size/aspect and the prompt file.
+ * @param {Array<Array<object>>} groups duplicate groups
+ * @param {{inbox?:string, target?:string, promptDir?:string, promptFallback?:string}} [opts]
+ */
+export function requeuePlan(groups, opts = {}) {
+  const inbox = opts.inbox || 'assets-src/inbox';
+  const target = opts.target || '>= 1920x1080, 16:9';
+  const promptDir = opts.promptDir || 'docs/prompts';
+  const fallback = opts.promptFallback || 'docs/ILLUSTRATION_PROMPTS.md';
+  const targets = requeueTargets(groups);
+  if (targets.length === 0) return 'REQUEUE: none';
+  const lines = [`REQUEUE (regenerate only these ${targets.length}):`];
+  for (const r of targets) {
+    const name = `scene-${String(r.scene).padStart(2, '0')}.png`;
+    const perScene = `${promptDir}/${name.replace(/\.png$/, '.txt')}`;
+    const prompt = fs.existsSync(perScene) ? perScene : fallback;
+    lines.push(`  scene ${r.scene} -> save as ${inbox}/${name} | target ${target} | prompt: ${prompt}`);
+  }
   return lines.join('\n');
 }
 

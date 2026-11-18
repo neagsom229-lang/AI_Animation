@@ -17,7 +17,10 @@ node scripts/film.mjs watch               # watch inbox + story, debounce, parti
 node scripts/film.mjs clean               # remove build/ (regenerable)
 ```
 
-Flags: `--story <path> --only scene=N --force --draft --strict --verbose --allow-missing`.
+Flags: `--story <path> --only scene=N --profile draft|final --force --draft --strict --verbose --allow-missing`.
+Ingest/doctor cache ffprobe + perceptual hashes in `build/cache/probe-cache.json`
+keyed by (path, mtime, size) with the sha256 stored; a second run over unchanged
+images does no probe work and prints the measured speedup.
 Config: `film.config.json` (validated at start). State/logs/previews: `build/`.
 Drop images into `assets-src/inbox/`, NEVER into `out/` or `build/` — `film status`
 prints the exact fix commands if you do. See `docs/ARCHITECTURE_FACTORY.md`.

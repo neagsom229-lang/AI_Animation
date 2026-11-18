@@ -22,6 +22,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { mediaCommand } from './lib/media-bin.mjs';
 import {
   ALLOWED_EXT, TARGET_W, TARGET_H, sceneNumberFromName, targetName,
   validateImage, realEsrganAvailable, REQUIRED_MANIFEST_FIELDS, hasAlpha,
@@ -51,9 +52,11 @@ export function parseArgs(argv) {
 }
 
 function ff(cmd, args) {
-  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const r = spawnSync(npx, ['remotion', cmd, ...args], {
-    cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32',
+  // Round 13 item 4: use the bundled Remotion binary directly — `npx` startup
+  // alone cost ~3 s per image. Falls back to `npx remotion <cmd>`.
+  const { cmd: exe, prefix, shell } = mediaCommand(cmd);
+  const r = spawnSync(exe, [...prefix, ...args], {
+    cwd: ROOT, encoding: 'utf8', shell,
     maxBuffer: 32 * 1024 * 1024,
   });
   return { ok: r.status === 0, status: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
