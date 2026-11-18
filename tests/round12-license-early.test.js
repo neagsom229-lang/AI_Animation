@@ -7,7 +7,7 @@ import fs from 'node:fs';
 test('ingest source states the license requirement before scanning', () => {
   const src = fs.readFileSync('scripts/lib/film-ingest.mjs', 'utf8');
   const reqIdx = src.indexOf('ingest REQUIREMENT: each image must have a licenseTermsUrl');
-  const scanIdx = src.indexOf('resolveDropFolder({ root, inbox');
+  const scanIdx = src.indexOf('const drop = resolveDropFolder(');
   assert.ok(reqIdx > 0, 'license requirement notice must exist');
   assert.ok(scanIdx > 0, 'drop-folder scan must exist');
   assert.ok(reqIdx < scanIdx, 'license requirement must be printed BEFORE scanning images');
@@ -17,7 +17,7 @@ test('ingest throws early when licenseTermsUrl empty and not --force', () => {
   const src = fs.readFileSync('scripts/lib/film-ingest.mjs', 'utf8');
   assert.ok(src.includes('licenseTermsUrl is required in film.config.json'), 'early error must exist');
   const errIdx = src.indexOf('licenseTermsUrl is required in film.config.json');
-  const scanIdx = src.indexOf('resolveDropFolder({ root, inbox');
+  const scanIdx = src.indexOf('const drop = resolveDropFolder(');
   assert.ok(errIdx < scanIdx, 'early throw must precede scanning');
 });
 
