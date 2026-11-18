@@ -26,9 +26,10 @@ import { buildIllustratedTimeline } from '../remotion/lib/illustrated-timing.ts'
 import { costGuard } from './lib/film-cost.mjs';
 import { voicePython } from './lib/film-env.mjs';
 import { profileForCommand, PROFILE_FINAL } from './lib/film-profile.mjs';
+import { writeStatusFile } from './lib/film-report.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const COMMANDS = ['setup', 'status', 'doctor', 'estimate', 'ingest', 'review', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
+const COMMANDS = ['setup', 'status', 'next', 'doctor', 'estimate', 'ingest', 'review', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
 
 /** Parse CLI args. Throws on unknown command/flag with exact usage. */
 export function parseArgs(argv) {
@@ -140,6 +141,9 @@ export async function cmdStatus({ cfg, args, graph }) {
     for (const b of report.requeue) console.log(b + '\n');
   }
   if (report.sheetStale === true) console.log('\nNOTE: preview sheet is STALE — run: node scripts/film.mjs preview');
+  // Round 13 item 7: human status file (generated, never hand-edited).
+  const status = writeStatusFile({ root: ROOT, cfg, story, report });
+  console.log(`\nwrote ${status.path} (${status.counts.scenes} scenes, profile ${status.profile || 'missing'}${status.release ? ', release candidate' : ', NOT releasable'}).`);
   // Cost guard.
   if (timeline) {
     const cg = costGuard({ story, timeline, fps: cfg.fps, cfg });
@@ -180,6 +184,11 @@ export async function main(argv = process.argv.slice(2)) {
       case 'status':
         code = await cmdStatus({ cfg, args, graph });
         break;
+      case 'next': {
+        const { main: nextMain } = await import('./film-next.mjs');
+        code = await nextMain([...(args.story ? ['--story', args.story] : []), ...(args.profile ? ['--profile', args.profile] : [])]);
+        break;
+      }
       case 'review': {
         const { main: reviewMain } = await import('./film-review.mjs');
         code = await reviewMain(args.reviewArgv || []);

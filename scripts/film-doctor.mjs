@@ -34,7 +34,7 @@ function parseArgs(argv) {
 }
 
 /** A gate result: {name, status:'PASS'|'BLOCK'|'SKIP', detail, fix}. */
-export function runGates({ cfg, story, allowMissing = false, profile = 'final' }) {
+export function runGates({ cfg, story, allowMissing = false, profile = 'final', stopOnBlock = true }) {
   const gates = [];
   const draft = profile === 'draft' || allowMissing;
   const add = (name, status, detail, fix = '') => gates.push({ name, status, detail, fix });
@@ -53,13 +53,13 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final' }
     if (!allowMissing && missingIll.length) {
       add('ingest', 'BLOCK', `${missingIll.length} scene(s) missing assets`,
         'Copy images into assets-src/inbox/, then: node scripts/film.mjs ingest');
-      return gates; // stop at first blocker
+      if (stopOnBlock) return gates; // stop at first blocker
     }
     add('ingest', allowMissing && missingIll.length ? 'SKIP' : 'PASS',
       allowMissing && missingIll.length ? `${missingIll.length} missing (--allow-missing)` : `${report.scenes.length} scenes present`);
   } catch (e) {
     add('ingest', 'BLOCK', e.message.slice(0, 100), 'Copy images into assets-src/inbox/, then: node scripts/film.mjs ingest');
-    return gates;
+    if (stopOnBlock) return gates;
   }
 
   // 2) duplicates (exact + near), pHash results cached by (path, mtime, size).
@@ -79,7 +79,7 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final' }
     add('duplicates', draft ? 'SKIP' : 'BLOCK',
       `${groups.length} duplicate group(s): ${groups.map((g) => g.map((r) => r.scene).join('=')).join('; ')}${draft ? ' (draft: warn only)' : ''}`,
       `Regenerate distinct images, then: node scripts/film.mjs ingest\n${requeuePlan(groups)}`);
-    if (!draft) return gates; // stop at first blocker
+    if (!draft && stopOnBlock) return gates; // stop at first blocker
   } else {
     add('duplicates', 'PASS', `${records.length} unique image(s)`);
   }
@@ -93,7 +93,7 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final' }
     if (low.length && !draft) {
       add('resolution', 'BLOCK', `${low.length} scene(s) source < ${cfg.quality.minSourceWidth}px`,
         'node scripts/film.mjs upscale --scene N (Real-ESRGAN BSD-3) or regenerate larger sources');
-      return gates;
+      if (stopOnBlock) return gates;
     }
     add('resolution', low.length ? 'SKIP' : 'PASS', low.length ? `${low.length} scene(s) source < ${cfg.quality.minSourceWidth}px (draft: warn only)` : `all >= ${cfg.quality.minSourceWidth}px`);
 
@@ -104,12 +104,12 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final' }
         `scene ${e.scene} missing [${[...REQUIRED_MANIFEST_FIELDS, ...REQUIRED_MANIFEST_FLAGS].filter((k) =>
           e[k] !== true && !(typeof e[k] === 'string' && e[k].trim())).join(',')}]`).join('; ')}`,
         'Review each image with: node scripts/film.mjs review --scene N --matches-narration yes --watermark clear --reviewed yes (and review --license-url). NEVER auto-fill.');
-      return gates;
+      if (stopOnBlock) return gates;
     }
     add('manual-review', bad.length ? 'SKIP' : 'PASS', bad.length ? `${bad.length} unreviewed (draft: warn only)` : 'all reviewed');
   } else {
-    add('resolution', 'BLOCK', 'no manifest.json', 'node scripts/film.mjs ingest');
-    return gates;
+    add('manual-review', 'BLOCK', 'no manifest.json', 'node scripts/film.mjs ingest');
+    if (stopOnBlock) return gates;
   }
 
   // 5) depth (files present + source labeled).
@@ -117,14 +117,22 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final' }
   if (depthFiles.length < records.length && !allowMissing) {
     add('depth', 'BLOCK', `${depthFiles.length}/${records.length} depth maps`,
       'node scripts/film.mjs depth --depth gradient (or model if torch available)');
-    return gates;
+    if (stopOnBlock) return gates;
   }
   add('depth', 'PASS', `${depthFiles.length}/${records.length} depth maps present`);
 
   // 6) parallax metrics present with real fields.
   const metricsPath = path.resolve(ROOT, 'out/review/parallax-metrics.json');
+  const addDraftRenderGate = () => {
+    const draftScript = fs.existsSync(path.resolve(ROOT, 'scripts/film-render-select.mjs'));
+    add('draft-render', draftScript ? 'PASS' : 'BLOCK',
+      draftScript ? 'script available (run: node scripts/film-render-select.mjs --scenes 1,4,7)' : 'missing',
+      'node scripts/film-render-select.mjs --scenes 1,4,7');
+  };
   if (!fs.existsSync(metricsPath)) {
     add('parallax-metrics', 'BLOCK', 'no parallax-metrics.json', 'node scripts/film.mjs depth --depth gradient');
+    if (stopOnBlock) return gates;
+    addDraftRenderGate();
     return gates;
   }
   const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
@@ -133,6 +141,8 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final' }
   if (badMetrics.length) {
     add('parallax-metrics', 'BLOCK', `${badMetrics.length} scene(s) missing stats`,
       'python scripts/depth.py --story <story> --depth gradient  (regenerates metrics)');
+    if (stopOnBlock) return gates;
+    addDraftRenderGate();
     return gates;
   }
   const allZero = (metrics.scenes || []).every((s) => s.depthEdgeMetric === 0);
@@ -142,10 +152,7 @@ export function runGates({ cfg, story, allowMissing = false, profile = 'final' }
         return e.length ? `${e[0]}/${e[Math.floor(e.length / 2)]}/${e[e.length - 1]}` : 'n/a'; })()}${allZero ? ' — ALL ZERO (gradient depth; see report)' : ''}`);
 
   // 7) draft render (report-only here; the real render is item 7).
-  const draftScript = fs.existsSync(path.resolve(ROOT, 'scripts/film-render-select.mjs'));
-  add('draft-render', draftScript ? 'PASS' : 'BLOCK',
-    draftScript ? 'script available (run: node scripts/film-render-select.mjs --scenes 1,4,7)' : 'missing',
-    'node scripts/film-render-select.mjs --scenes 1,4,7');
+  addDraftRenderGate();
   return gates;
 }
 
