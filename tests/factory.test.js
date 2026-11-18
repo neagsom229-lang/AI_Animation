@@ -98,11 +98,19 @@ test('film CLI parseArgs: commands + flags', () => {
 // --- wrong-folder detection ---
 test('wrong-folder detection finds out/ images and prints exact fix', () => {
   const cfg = JSON.parse(fs.readFileSync('film.config.json', 'utf8'));
-  const hits = findWrongFolderImages('.', cfg);
-  assert.ok(hits.some((h) => h.includes('out/khmer-empire-storyboard/scene-')), `hits: ${hits.join(',')}`);
-  const fixes = wrongFolderFixCommands(hits.slice(0, 1), cfg);
-  assert.ok(fixes[0].startsWith('Copy-Item'));
-  assert.ok(fixes.some((f) => f.includes('film.mjs ingest')));
+  const dir = 'out/wrong-folder-test';
+  const file = `${dir}/scene-99.png`;
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, 'fixture');
+  try {
+    const hits = findWrongFolderImages('.', cfg);
+    assert.ok(hits.includes(file), `hits: ${hits.join(',')}`);
+    const fixes = wrongFolderFixCommands(hits.slice(-1), cfg);
+    assert.ok(fixes[0].startsWith('Copy-Item'));
+    assert.ok(fixes.some((f) => f.includes('film.mjs ingest')));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // --- cost guard ---

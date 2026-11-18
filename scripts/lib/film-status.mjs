@@ -23,7 +23,7 @@ export function findWrongFolderImages(root, cfg) {
         if (e.isDirectory()) {
           if (e.name === 'node_modules') continue;
           // Factory-managed staging/preview dirs are NOT user drops.
-          if (/^(ingest|preview)$/.test(e.name)) continue;
+          if (/^(ingest|preview|cache)$/.test(e.name)) continue;
           walk(p);
         } else if (IMG_RE.test(e.name)) {
           // Generated previews carry the prefix; only flag source-looking names.

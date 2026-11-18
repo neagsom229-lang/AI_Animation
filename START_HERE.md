@@ -1,23 +1,22 @@
 # START HERE — Khmer Empire illustrated film
 
-Five commands. Copy/paste in order from the repository root.
+Three commands. Copy/paste in order from the repository root.
 
 ```bash
-# 1. One Python environment (creates/repairs .venv-depth; verifies all imports)
+# 1. Once: one Python environment (creates/repairs .venv-depth; verifies imports)
 node scripts/film.mjs setup
 
-# 2. One drop folder: put your images in assets-src/inbox/scene-NN.png, then ingest
-node scripts/film.mjs ingest
+# 2. The ONE command: environment check -> ingest -> depth -> exactly ONE next action
+node scripts/film.mjs all
 
-# 3. Depth maps for the 2.5D parallax (depth-based camera movement, not true 3D)
-node scripts/film.mjs depth
-
-# 4. Exactly ONE next action + the blocker count (no guessing)
-node scripts/film.mjs next
-
-# 5. Render a draft (720p) and watch it — the file says DRAFT - NOT RELEASABLE
-node scripts/film.mjs draft
+# 3. Optional: render a draft ONLY when there are no blockers and free RAM >= 4 GB
+node scripts/film.mjs all --draft
 ```
+
+`film all` stops at the first blocker for the chosen profile and prints one action.
+It never loops, never forces, and never edits `assets-src/inbox/`. For a faster
+480p look use `node scripts/film.mjs draft --fast --all` (labelled
+`DRAFT-FAST-NOT-RELEASABLE`); for selected scenes use `film draft --scenes 2,7,15`.
 
 ## Before you go further
 
