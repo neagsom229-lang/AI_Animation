@@ -6,6 +6,9 @@
 node scripts/film.mjs status              # dashboard + wrong-folder + cost + verdict
 node scripts/film.mjs status --strict     # exit 1 if not releasable
 node scripts/film.mjs ingest --force      # copy inbox images -> normalized + manifest (force = provisional license)
+node scripts/film.mjs review sheet        # build out/review/review.html (image + narration + hash + flags)
+node scripts/film.mjs review --scene 3 --matches-narration yes --watermark clear --reviewed yes
+node scripts/film.mjs review --license-url https://tool.example/terms
 node scripts/film.mjs depth               # depth.py (gradient if model unavailable)
 node scripts/film.mjs voice               # edge-tts narration
 node scripts/film.mjs preview             # contact sheet + animatic from REAL images

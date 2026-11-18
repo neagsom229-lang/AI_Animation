@@ -28,13 +28,19 @@ import { voicePython } from './lib/film-env.mjs';
 import { profileForCommand, PROFILE_FINAL } from './lib/film-profile.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const COMMANDS = ['setup', 'status', 'doctor', 'estimate', 'ingest', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
+const COMMANDS = ['setup', 'status', 'doctor', 'estimate', 'ingest', 'review', 'upscale', 'depth', 'voice', 'preview', 'render', 'publish', 'qa', 'all', 'watch', 'clean'];
 
 /** Parse CLI args. Throws on unknown command/flag with exact usage. */
 export function parseArgs(argv) {
   const a = { command: null, story: null, only: null, force: false, draft: false, strict: false, verbose: false, allowMissing: false, depthMode: null, profile: null };
   const rest = [...argv];
   if (rest.length && !rest[0].startsWith('-')) a.command = rest.shift();
+  // `film review` owns its own flags (sheet / --scene / --license-url); pass the
+  // remainder through unchanged so both CLIs stay single-purpose.
+  if (a.command === 'review') {
+    a.reviewArgv = rest;
+    return a;
+  }
   for (let i = 0; i < rest.length; i += 1) {
     const x = rest[i];
     if (x === '--story' && rest[i + 1]) a.story = rest[++i];
@@ -174,6 +180,11 @@ export async function main(argv = process.argv.slice(2)) {
       case 'status':
         code = await cmdStatus({ cfg, args, graph });
         break;
+      case 'review': {
+        const { main: reviewMain } = await import('./film-review.mjs');
+        code = await reviewMain(args.reviewArgv || []);
+        break;
+      }
       case 'doctor': {
         const { main: doctorMain } = await import('./film-doctor.mjs');
         const doctorProfile = args.profile || 'final';
