@@ -30,7 +30,7 @@ test('draft source reports cold start separately and records the actual voice id
   assert.match(src, /bundleMs = Date.now\(\) - tBundle/);
   assert.match(src, /NOT charged to scene 1/);
   assert.match(src, /voiceId = voiceData\.voice/);
-  assert.match(src, /type: sceneType\(/);
+  assert.match(src, /const type = sceneType\(spec\)/);
   assert.match(src, /summaryTable\(timing\)/);
   assert.match(src, /COLD START \(separate/);
 });

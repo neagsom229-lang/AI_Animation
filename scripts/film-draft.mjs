@@ -17,6 +17,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer';
@@ -32,11 +33,14 @@ import { estimate, MEASURED_MS_PER_FRAME } from './film-estimate.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const DRAFT_LABEL = 'DRAFT-NOT-RELEASABLE';
+export const FAST_LABEL = 'DRAFT-FAST-NOT-RELEASABLE';
 export const DRAFTS_ROOT = 'out/drafts';
+export const SCENE_CACHE_REL = 'out/drafts/scene-cache';
+export const FAST_SCALE = 2 / 3; // 1280x720 composition -> ~854x480 output
 
 /** Parse draft CLI arguments. Throws with exact usage on bad input. */
 export function parseArgs(argv) {
-  const a = { scenes: [2, 7, 15], all: false, story: null, outDir: null };
+  const a = { scenes: [2, 7, 15], all: false, fast: false, story: null, outDir: null };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--scenes' && argv[i + 1]) {
       const raw = String(argv[++i]).split(',').map((n) => Number(n.trim()));
@@ -47,6 +51,8 @@ export function parseArgs(argv) {
       a.all = false;
     } else if (argv[i] === '--all') {
       a.all = true;
+    } else if (argv[i] === '--fast') {
+      a.fast = true;
     } else if (argv[i] === '--story' && argv[i + 1]) {
       a.story = argv[++i];
     } else if (argv[i] === '--out-dir' && argv[i + 1]) {
@@ -54,7 +60,7 @@ export function parseArgs(argv) {
     } else if (argv[i] === '--help' || argv[i] === '-h') {
       a.help = true;
     } else {
-      throw new Error(`Unknown: ${argv[i]}. Usage: node scripts/film-draft.mjs [--scenes 2,7,15 | --all] [--story path]`);
+      throw new Error(`Unknown: ${argv[i]}. Usage: node scripts/film-draft.mjs [--scenes 2,7,15 | --all] [--fast] [--story path]`);
     }
   }
   if (a.all && a.scenes.length !== 3 && argv.includes('--scenes')) {
@@ -80,13 +86,39 @@ export function draftOutputDir({ root, storyName, timestamp = new Date(), outDir
 }
 
 /** Labelled video filename — the word NOT RELEASABLE is part of the artifact. */
-export function draftVideoName(storyName) {
-  return `${storyName}-${DRAFT_LABEL}.mp4`;
+export function draftVideoName(storyName, label = DRAFT_LABEL) {
+  return `${storyName}-${label}.mp4`;
 }
 
 /** Scene type from the story JSON. Painted scenes are 2.5D, never true 3D. */
 export function sceneType(spec) {
   return spec?.media?.type === 'world3d' ? 'world3d' : 'illustration';
+}
+
+/** SHA-256 of a file's bytes (never trust mtime alone for cache identity). */
+export function sha256File(file) {
+  try { return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch { return null; }
+}
+
+/**
+ * Per-scene cache key. Includes the image + depth bytes, voice id/scene duration,
+ * parallax limit, type and fast flag. Changing one image changes ONLY that scene.
+ */
+export function sceneCacheKey({ sceneNo, imageSha, depthSha, voiceId, voiceSceneId, frames, type, fast, limitFactor, metric }) {
+  const h = crypto.createHash('sha256');
+  for (const part of [sceneNo, imageSha, depthSha, voiceId, voiceSceneId, frames, type, fast ? 'fast' : 'normal',
+    limitFactor, metric]) h.update(String(part ?? '')).update('\u0000');
+  return h.digest('hex').slice(0, 16);
+}
+
+/** Stable per-scene cache path (outside timestamped output dirs). */
+export function sceneCachePath(root, key, sceneNo) {
+  return path.resolve(root, SCENE_CACHE_REL, key, `scene-${String(sceneNo).padStart(2, '0')}.mp4`);
+}
+
+/** Cached still path for a scene/position (early=0, mid=1, late=2). */
+export function stillCachePath(root, key, sceneNo, k) {
+  return path.resolve(root, SCENE_CACHE_REL, key, `scene-${String(sceneNo).padStart(2, '0')}-${k}.png`);
 }
 
 /** Final report table: scene, type, frames, ms/frame, seconds, share of render time. */
@@ -152,6 +184,7 @@ export function compareEstimate({ timing, est }) {
  */
 export function honestyNotes({ story, manifest, voiceData, metrics, sceneNumbers, label = DRAFT_LABEL }) {
   const scenes = manifest?.scenes || [];
+  const fast = label === FAST_LABEL;
   const unreviewed = scenes.filter((e) => e.reviewed !== true).map((e) => Number(e.scene));
   const noLicense = scenes.filter((e) => !e.licenseTermsUrl || !String(e.licenseTermsUrl).trim()).length;
   const dupes = (metrics?.duplicateGroups || []).map((g) => g.map((r) => r.scene).join('='));
@@ -166,6 +199,10 @@ export function honestyNotes({ story, manifest, voiceData, metrics, sceneNumbers
     `- Voice: ${voiceData?.provider || 'unknown'} (${voiceData?.provider === 'mock' ? 'MOCK — not acceptable for final' : 'real TTS output'}). Music: not judged (no score gate in the draft).`,
     '- `film estimate` is a PREDICTION from measured ms/frame (not a result); the numbers here are the real render of these exact scenes, so a difference is expected and is not a failure.',
     `- Scenes rendered in this draft: ${sceneNumbers.join(', ')}. Unrendered scenes are not reviewed here.`,
+    ...(fast ? [
+      '- FAST preview is 854x480 (render scale 2/3 of the 1280x720 draft).',
+      '- FAST world3d half-frame-rate is NOT enabled: Remotion renderer validateEveryNthFrame accepts only 1, so no frame skipping was faked. World3d scenes render at normal frame rate at 480p.'
+    ] : []),
   ].join('\n') + '\n';
 }
 
@@ -173,8 +210,9 @@ export function honestyNotes({ story, manifest, voiceData, metrics, sceneNumbers
 export async function main(argv = process.argv.slice(2)) {
   const startedAt = Date.now();
   const args = parseArgs(argv);
+  const label = args.fast ? FAST_LABEL : DRAFT_LABEL;
   if (args.help) {
-    console.log('node scripts/film-draft.mjs [--scenes 2,7,15 | --all] [--story path]');
+    console.log('node scripts/film-draft.mjs [--scenes 2,7,15 | --all] [--fast] [--story path]');
     return 0;
   }
   const cfg = loadConfig(ROOT);
@@ -239,7 +277,8 @@ export async function main(argv = process.argv.slice(2)) {
     void i;
   });
 
-  console.log(`[film draft] ${DRAFT_LABEL} story=${cfg.story} profile=draft resolution=${estimateResult.resolution} scenes=${scenes.join(',')}`);
+  const outputRes = args.fast ? '854x480 (fast: scale 2/3)' : estimateResult.resolution;
+  console.log(`[film draft] ${label} story=${cfg.story} profile=draft resolution=${outputRes} scenes=${scenes.join(',')}`);
   console.log(`[film draft] output: ${path.relative(ROOT, outDir).replace(/\\/g, '/')}`);
   const setupMs = Date.now() - startedAt; // config + asset staging, before the bundle
   const tBundle = Date.now();
@@ -263,30 +302,50 @@ export async function main(argv = process.argv.slice(2)) {
 
   for (const sceneNo of scenes) {
     const t = timeline.scenes[sceneNo - 1];
-    const composition = await selectComposition({ serveUrl, id: 'IllustratedFilm', inputProps });
+    const spec = story.scenes[sceneNo - 1] || {};
+    const type = sceneType(spec);
     const start = t.startFrame;
     const end = t.startFrame + t.durationInFrames - 1;
-    const mp4 = path.join(outDir, `scene-${String(sceneNo).padStart(2, '0')}.mp4`);
-    const t0 = Date.now();
-    await renderMedia({
-      composition, serveUrl, codec: 'h264', outputLocation: mp4,
-      frameRange: [start, end], inputProps, concurrency: cfg.concurrency,
-      timeoutInMilliseconds: 60000, onProgress: () => {},
+    const ext = spec.image ? path.extname(spec.image) : '.png';
+    const depthRel = spec.image ? `${spec.image.slice(0, -ext.length)}-depth${ext}` : null;
+    const key = sceneCacheKey({
+      sceneNo,
+      imageSha: spec.image ? sha256File(path.resolve(ROOT, spec.image)) : null,
+      depthSha: depthRel ? sha256File(path.resolve(ROOT, depthRel)) : null,
+      voiceId, voiceSceneId: t.id, frames: t.durationInFrames, type, fast: args.fast,
+      limitFactor: limitFactors[t.id], metric: parallaxMetrics[t.id],
     });
-    const ms = Date.now() - t0;
+    const cacheFile = sceneCachePath(ROOT, key, sceneNo);
+    const mp4 = path.join(outDir, `scene-${String(sceneNo).padStart(2, '0')}.mp4`);
+    const cached = fs.existsSync(cacheFile) && fs.statSync(cacheFile).size > 0;
+    const composition = await selectComposition({ serveUrl, id: 'IllustratedFilm', inputProps });
+    let ms = 0;
+    if (cached) {
+      fs.copyFileSync(cacheFile, mp4); // reuse; no frames rendered
+    } else {
+      const t0 = Date.now();
+      await renderMedia({
+        composition, serveUrl, codec: 'h264', outputLocation: mp4,
+        frameRange: [start, end], inputProps, concurrency: cfg.concurrency,
+        timeoutInMilliseconds: 60000, onProgress: () => {},
+        ...(args.fast ? { scale: FAST_SCALE } : {}),
+      });
+      ms = Date.now() - t0;
+      fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+      fs.copyFileSync(mp4, cacheFile);
+    }
     const bytes = fs.statSync(mp4).size;
-    const msPerFrame = Number((ms / t.durationInFrames).toFixed(1));
+    const msPerFrame = cached ? 0 : Number((ms / t.durationInFrames).toFixed(1));
     sceneFiles.push(mp4);
     timing.push({
-      scene: sceneNo, id: t.id,
-      type: sceneType(story.scenes[sceneNo - 1]),
+      scene: sceneNo, id: t.id, type, cacheKey: key, cached,
       voiceId, voiceSceneId: t.id,
       frames: t.durationInFrames,
       seconds: Number((t.durationInFrames / cfg.fps).toFixed(2)),
       ms, msPerFrame, bytes, sizeMB: Number((bytes / 1e6).toFixed(2)),
       limitFactor: limitFactors[t.id] ?? null,
     });
-    console.log(`[film draft] scene ${sceneNo} [${timing[timing.length - 1].type}] voice=${voiceId}/${t.id}: ${t.durationInFrames}f in ${(ms / 1000).toFixed(1)}s = ${msPerFrame} ms/frame, ${(bytes / 1e6).toFixed(2)} MB`);
+    console.log(`[film draft] scene ${sceneNo} [${type}] voice=${voiceId}/${t.id}: ${cached ? 'CACHED (0 rendered)' : `${t.durationInFrames}f in ${(ms / 1000).toFixed(1)}s = ${msPerFrame} ms/frame`}, ${(bytes / 1e6).toFixed(2)} MB, key=${key.slice(0, 8)}`);
 
     // 3 real stills per scene: 15% / 50% / 85% through the scene. The exact
     // start/end frames are crossfade-to-black, so they make useless stills.
@@ -294,13 +353,23 @@ export async function main(argv = process.argv.slice(2)) {
     const tStills = Date.now();
     for (let k = 0; k < picks.length; k += 1) {
       const f = path.join(outDir, `scene-${String(sceneNo).padStart(2, '0')}-${labels[k]}.png`);
-      await renderStill({ composition, serveUrl, output: f, frame: picks[k], inputProps, timeoutInMilliseconds: 60000 });
+      const cf = stillCachePath(ROOT, key, sceneNo, k);
+      if (fs.existsSync(cf) && fs.statSync(cf).size > 0) {
+        fs.copyFileSync(cf, f);
+      } else {
+        await renderStill({
+          composition, serveUrl, output: f, frame: picks[k], inputProps,
+          timeoutInMilliseconds: 60000, ...(args.fast ? { scale: FAST_SCALE } : {}),
+        });
+        fs.mkdirSync(path.dirname(cf), { recursive: true });
+        fs.copyFileSync(f, cf);
+      }
       stills.push(f);
     }
     stillsMs += Date.now() - tStills;
   }
 
-  const video = path.join(outDir, draftVideoName(storyName));
+  const video = path.join(outDir, draftVideoName(storyName, label));
   const tStitch = Date.now();
   stitchScenes(sceneFiles, video);
   const stitchMs = Date.now() - tStitch;
@@ -309,14 +378,17 @@ export async function main(argv = process.argv.slice(2)) {
   const sheet = path.join(outDir, 'contact.png');
   const sheetInfo = tileContactSheet({ inputs: stills, output: sheet, cols: 3, cellWidth: 480 });
   const comparison = compareEstimate({ timing, est: estimateResult });
+  const renderedCount = timing.filter((t) => !t.cached).length;
+  const cachedCount = timing.length - renderedCount;
 
   const report = {
-    label: DRAFT_LABEL,
+    label,
     releasable: false,
     configHash: configHash(cfg),
     story: cfg.story,
     profile: 'draft',
-    resolution: estimateResult.resolution,
+    resolution: outputRes,
+    fast: args.fast,
     scenes,
     output: path.relative(ROOT, video).replace(/\\/g, '/'),
     videoBytes,
@@ -326,6 +398,7 @@ export async function main(argv = process.argv.slice(2)) {
     msPerFrame: comparison.measuredMsPerFrame,
     estimateMsPerFrame: comparison.estimatedMsPerFrame,
     voiceId,
+    cache: { renderedCount, cachedCount, sceneCache: SCENE_CACHE_REL },
     timingBreakdown: {
       setupMs, bundleMs,
       sceneRenderMs: timing.reduce((s, t) => s + t.ms, 0),
@@ -339,14 +412,15 @@ export async function main(argv = process.argv.slice(2)) {
   };
   fs.writeFileSync(path.join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   const honesty = honestyNotes({
-    story, manifest, voiceData, sceneNumbers: scenes,
+    story, manifest, voiceData, sceneNumbers: scenes, label,
     metrics: { ...metrics, duplicateGroups },
   });
   fs.writeFileSync(path.join(outDir, 'honesty.txt'), honesty, 'utf8');
   const text = [
-    `${DRAFT_LABEL} — NOT RELEASABLE`,
+    `${label} — NOT RELEASABLE`,
     `output: ${report.output}`,
-    `scenes: ${scenes.join(', ')} (${estimateResult.resolution})`,
+    `scenes: ${scenes.join(', ')} (${outputRes})`,
+    `scene cache: ${renderedCount} rendered, ${cachedCount} cached (0 rendered expected on an unchanged second run)`,
     `duration: ${probe.duration ?? 'unknown'} s; size: ${report.videoSizeMB} MB; bytes: ${videoBytes}`,
     `ffprobe: ${JSON.stringify(probe)}`,
     `voice id actually used: ${voiceId}`,
@@ -364,6 +438,7 @@ export async function main(argv = process.argv.slice(2)) {
   ].join('\n');
   fs.writeFileSync(path.join(outDir, 'REPORT.txt'), text, 'utf8');
 
+  console.log(`[film draft] scene cache: ${renderedCount} rendered, ${cachedCount} reused`);
   console.log(`[film draft] COLD START setup ${setupMs} ms + bundle ${bundleMs} ms (NOT charged to scene 1)`);
   console.log(`[film draft] DONE ${report.output} — ${report.durationSeconds ?? '?'}s, ${report.videoSizeMB} MB, ${comparison.measuredMsPerFrame} ms/frame, voice=${voiceId}`);
   console.log(`[film draft] compare to film estimate: ${comparison.estimatedMsPerFrame} ms/frame predicted`);
