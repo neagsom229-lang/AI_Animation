@@ -267,12 +267,11 @@ export async function main(argv = process.argv.slice(2)) {
       case 'qa':
         runCmd('npm', ['run', 'qa'], { verbose: args.verbose, label: 'qa', fix: 'Fix the failing gate reported above' });
         break;
-      case 'all':
-        for (const c of ['ingest', 'depth', 'voice', 'preview', 'render', 'publish', 'qa']) {
-          graph.log(`all -> ${c}`);
-          await main([c, '--story', cfg.story, ...(args.draft ? ['--draft'] : []), ...(args.force ? ['--force'] : [])]);
-        }
+      case 'all': {
+        const { main: allMain } = await import('./film-all.mjs');
+        code = await allMain({ cfg, args, graph, root: ROOT });
         break;
+      }
       case 'watch': {
         const { watch } = await import('./lib/film-watch-loop.mjs');
         code = await watch({ cfg, args, graph, ROOT });
