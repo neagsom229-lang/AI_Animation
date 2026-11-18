@@ -47,6 +47,11 @@ export function parseArgs(argv) {
     a.draftArgv = rest;
     return a;
   }
+  // `film clean` owns --plan/--apply/--confirm/--restore.
+  if (a.command === 'clean') {
+    a.cleanArgv = rest;
+    return a;
+  }
   for (let i = 0; i < rest.length; i += 1) {
     const x = rest[i];
     if (x === '--story' && rest[i + 1]) a.story = rest[++i];
@@ -270,11 +275,8 @@ export async function main(argv = process.argv.slice(2)) {
         break;
       }
       case 'clean': {
-        for (const d of [cfg.paths.build]) {
-          const p = path.resolve(ROOT, d);
-          if (fs.existsSync(p)) { fs.rmSync(p, { recursive: true, force: true }); console.log(`[clean] removed ${d}/`); }
-        }
-        graph.log('clean done');
+        const { main: cleanMain } = await import('./film-clean.mjs');
+        code = await cleanMain(args.cleanArgv || []);
         break;
       }
     }
