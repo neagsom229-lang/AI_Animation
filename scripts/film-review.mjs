@@ -156,6 +156,53 @@ export function duplicateMap(records) {
   return { groups, map };
 }
 
+const STOPWORDS = new Set(('the a an and or but if in on at to of for from by with as is are was were be been being this that these those its it his her their our your not no has have had he she they them we you into over under about after before during while when where which who whom whose what how all any both each few more most other some such only own same so than too very can will just should now did does do').split(' '));
+
+/** Lowercase content words (length > 3) without common stopwords. Pure. */
+export function contentWords(text) {
+  return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/).filter((w) => w.length > 3 && !STOPWORDS.has(w));
+}
+
+/** Text-only overlap between narration and the scene prompt. Never judges an image. */
+export function keywordOverlap(narration, prompt) {
+  const a = new Set(contentWords(narration));
+  const b = new Set(contentWords(prompt));
+  if (!a.size || !b.size) return { score: 0, shared: [] };
+  const shared = [...a].filter((w) => b.has(w));
+  return { score: Number((shared.length / a.size).toFixed(2)), shared };
+}
+
+function promptForScene(root, n) {
+  const f = path.resolve(root, 'docs', 'prompts', `scene-${String(n).padStart(2, '0')}.txt`);
+  if (!fs.existsSync(f)) return '';
+  const txt = fs.readFileSync(f, 'utf8');
+  const i = txt.indexOf('PROMPT:');
+  return i >= 0 ? txt.slice(i + 7) : txt;
+}
+
+/**
+ * Scenes to CHECK BY EYE. This is a TEXT-ONLY heuristic (narration vs prompt)
+ * plus duplicate detection; it does not look at pixels and does not claim to
+ * judge whether an image matches its narration.
+ * @returns {Map<number, string[]>} scene -> reasons
+ */
+export function checkByEyeFlags({ root = ROOT, story, groups = [], threshold = 0.12 } = {}) {
+  const map = new Map();
+  const dup = new Map();
+  groups.forEach((g, i) => { for (const r of g) dup.set(Number(r.scene), i + 1); });
+  (story.scenes || []).forEach((s, i) => {
+    const n = Number(String(s.id).match(/(\d+)/)?.[0] || i + 1);
+    const reasons = [];
+    const narration = (s.narration && s.narration.en) || '';
+    const overlap = keywordOverlap(narration, promptForScene(root, n));
+    if (overlap.score < threshold) reasons.push(`text overlap ${(overlap.score * 100).toFixed(0)}%`);
+    if (dup.has(n)) reasons.push(`duplicate group ${dup.get(n)} — one image cannot match two narrations`);
+    if (reasons.length) map.set(n, reasons);
+  });
+  return map;
+}
+
 /** Build out/review/review.html from the real manifest + story + images. */
 export function buildReviewSheet({ root = ROOT, storyPath, outFile = 'out/review/review.html', now = new Date() } = {}) {
   const cfg = loadConfig(root);
@@ -174,6 +221,7 @@ export function buildReviewSheet({ root = ROOT, storyPath, outFile = 'out/review
   });
   saveCache(pruneCache(cache, root), root);
   const { groups, map } = duplicateMap(records);
+  const byEye = checkByEyeFlags({ root, story, groups });
   const outPath = path.resolve(root, outFile);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
@@ -182,6 +230,10 @@ export function buildReviewSheet({ root = ROOT, storyPath, outFile = 'out/review
     const storyScene = (story.scenes || [])[n - 1] || {};
     const narration = storyScene.narration || {};
     const dupe = map.get(n) || null;
+    const eyeReasons = byEye.get(n) || null;
+    const eyeHtml = eyeReasons
+      ? `<span class="no">CHECK BY EYE</span> — ${esc(eyeReasons.join('; '))}`
+      : '<span class="yes">text overlap ok</span>';
     const imgPath = path.relative(path.dirname(outPath), path.resolve(root, e.file)).replace(/\\/g, '/');
     const flag = (v) => (v === true ? '<span class="yes">yes</span>' : '<span class="no">NO</span>');
     const wm = e.watermarkCheck === true
@@ -198,6 +250,7 @@ export function buildReviewSheet({ root = ROOT, storyPath, outFile = 'out/review
       <dt>source</dt><dd>${esc(e.sourceWidth ?? '-')} x ${esc(e.sourceHeight ?? '-')} px${e.upscaled ? ' (upscaled copy)' : ''}</dd>
       <dt>aspect</dt><dd>${esc(e.sourceAspect ?? '-')} — crops ${esc(e.aspectCropPercent ?? 0)}% ${esc(e.aspectCropAxis ?? '')}</dd>
       <dt>duplicate</dt><dd>${dupe ? `<span class="no">group ${dupe} (${groups[dupe - 1].length} scenes)</span>` : '<span class="yes">none</span>'}</dd>
+      <dt>check by eye</dt><dd>${eyeHtml}</dd>
       <dt>watermark</dt><dd>${wm}</dd>
       <dt>reviewed</dt><dd>${flag(e.reviewed)}</dd>
       <dt>matches narration</dt><dd>${flag(e.matchesNarration)}</dd>
@@ -242,7 +295,9 @@ export function buildReviewSheet({ root = ROOT, storyPath, outFile = 'out/review
 <div class="sub">Generated ${esc(now.toISOString())} from ${esc(path.relative(root, manifestPath).replace(/\\/g, '/'))}.
 Manifest profile: <b>${esc(man.factory?.profile || man.profile || 'missing')}</b>.</div>
 <div class="hint">Review one scene at a time, then run the command shown under <b>How to record</b>.
-Nothing is auto-set — these flags are only written by <code>film review</code>.</div>
+Nothing is auto-set — these flags are only written by <code>film review</code>.
+<b>CHECK BY EYE</b> is a text-only heuristic (narration vs prompt) plus duplicate
+detection; it does <i>not</i> look at pixels and does not judge the picture.</div>
 <table>
 <thead><tr><th>#</th><th>image</th><th>narration + checks</th></tr></thead>
 <tbody>
@@ -259,6 +314,8 @@ node scripts/film.mjs review --license-url https://example.com/terms</code></pre
   return {
     out: path.relative(root, outPath).replace(/\\/g, '/'), scenes: (man.scenes || []).length,
     duplicateGroups: groups.length,
+    checkByEye: byEye.size,
+    checkByEyeScenes: [...byEye.keys()].sort((a, b) => a - b),
   };
 }
 
@@ -286,6 +343,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const sheet = buildReviewSheet({ root: ROOT, storyPath: a.story, outFile: a.out });
   console.log(`wrote ${sheet.out} (${sheet.scenes} scenes, ${sheet.duplicateGroups} duplicate group(s))`);
+  console.log(`CHECK BY EYE (text-only, not a picture judgement): ${sheet.checkByEye} scene(s) — ${sheet.checkByEyeScenes.join(', ') || 'none'}`);
   console.log('NEXT: open it, then record decisions with: node scripts/film.mjs review --scene N --matches-narration yes --watermark clear --reviewed yes');
   return 0;
 }
