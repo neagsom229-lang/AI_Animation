@@ -41,9 +41,12 @@ test('output path is timestamped under out/drafts and the filename says NOT RELE
 });
 
 test('probeVideo reads a REAL mp4 with the bundled ffprobe', () => {
-  const dir = 'out/.illustrated-scene-cache';
-  const file = fs.readdirSync(dir).find((f) => /^sc-01-.*\.mp4$/.test(f));
-  assert.ok(file, 'a real cached scene render must exist');
+  // The old cache was deleted by film clean; a real draft scene MP4 is the
+  // current source of truth for this probe test.
+  const drafts = fs.readdirSync('out/drafts').filter((d) => /^\d{4}-/.test(d)).sort();
+  const dir = path.join('out/drafts', drafts[drafts.length - 1]);
+  const file = fs.readdirSync(dir).find((f) => /^scene-\d+\.mp4$/.test(f));
+  assert.ok(file, 'a real draft scene render must exist');
   const p = probeVideo(path.join(dir, file));
   assert.equal(p.ok, true);
   assert.equal(p.width, 1280);

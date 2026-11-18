@@ -84,6 +84,24 @@ export function draftVideoName(storyName) {
   return `${storyName}-${DRAFT_LABEL}.mp4`;
 }
 
+/** Scene type from the story JSON. Painted scenes are 2.5D, never true 3D. */
+export function sceneType(spec) {
+  return spec?.media?.type === 'world3d' ? 'world3d' : 'illustration';
+}
+
+/** Final report table: scene, type, frames, ms/frame, seconds, share of render time. */
+export function summaryTable(timing) {
+  const lines = [
+    '| scene | type | frames | ms/frame | seconds | % of total |',
+    '|---:|---|---:|---:|---:|---:|',
+  ];
+  const total = timing.reduce((s, t) => s + t.ms, 0) || 1;
+  for (const t of timing) {
+    lines.push(`| ${t.scene} | ${t.type} | ${t.frames} | ${t.msPerFrame} | ${t.seconds} | ${(100 * t.ms / total).toFixed(1)}% |`);
+  }
+  return lines;
+}
+
 /** Probe an MP4 with the bundled ffprobe (never throws). */
 export function probeVideo(file) {
   const r = runMedia('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
@@ -153,6 +171,7 @@ export function honestyNotes({ story, manifest, voiceData, metrics, sceneNumbers
 
 /** Render the selected scenes for real and write the whole deliverable. */
 export async function main(argv = process.argv.slice(2)) {
+  const startedAt = Date.now();
   const args = parseArgs(argv);
   if (args.help) {
     console.log('node scripts/film-draft.mjs [--scenes 2,7,15 | --all] [--story path]');
@@ -222,11 +241,14 @@ export async function main(argv = process.argv.slice(2)) {
 
   console.log(`[film draft] ${DRAFT_LABEL} story=${cfg.story} profile=draft resolution=${estimateResult.resolution} scenes=${scenes.join(',')}`);
   console.log(`[film draft] output: ${path.relative(ROOT, outDir).replace(/\\/g, '/')}`);
+  const setupMs = Date.now() - startedAt; // config + asset staging, before the bundle
+  const tBundle = Date.now();
   const serveUrl = await bundle({
     entryPoint: path.join(ROOT, 'remotion/index.ts'),
     publicDir: path.join(ROOT, 'public'),
     onProgress: () => {},
   });
+  const bundleMs = Date.now() - tBundle; // cold start, NEVER charged to scene 1
 
   const inputProps = {
     story, voiceData, assetStatus, allowMissing: false,
@@ -236,6 +258,8 @@ export async function main(argv = process.argv.slice(2)) {
   const timing = [];
   const stills = [];
   const labels = ['early', 'mid', 'late'];
+  const voiceId = voiceData.voice || voiceData.provider || 'unknown';
+  let stillsMs = 0;
 
   for (const sceneNo of scenes) {
     const t = timeline.scenes[sceneNo - 1];
@@ -255,26 +279,31 @@ export async function main(argv = process.argv.slice(2)) {
     sceneFiles.push(mp4);
     timing.push({
       scene: sceneNo, id: t.id,
-      media: (story.scenes[sceneNo - 1]?.media || {}).type || 'illustration',
+      type: sceneType(story.scenes[sceneNo - 1]),
+      voiceId, voiceSceneId: t.id,
       frames: t.durationInFrames,
       seconds: Number((t.durationInFrames / cfg.fps).toFixed(2)),
       ms, msPerFrame, bytes, sizeMB: Number((bytes / 1e6).toFixed(2)),
       limitFactor: limitFactors[t.id] ?? null,
     });
-    console.log(`[film draft] scene ${sceneNo}: ${t.durationInFrames}f in ${(ms / 1000).toFixed(1)}s = ${msPerFrame} ms/frame, ${(bytes / 1e6).toFixed(2)} MB`);
+    console.log(`[film draft] scene ${sceneNo} [${timing[timing.length - 1].type}] voice=${voiceId}/${t.id}: ${t.durationInFrames}f in ${(ms / 1000).toFixed(1)}s = ${msPerFrame} ms/frame, ${(bytes / 1e6).toFixed(2)} MB`);
 
     // 3 real stills per scene: 15% / 50% / 85% through the scene. The exact
     // start/end frames are crossfade-to-black, so they make useless stills.
     const picks = [0.15, 0.5, 0.85].map((f) => start + Math.floor(t.durationInFrames * f));
+    const tStills = Date.now();
     for (let k = 0; k < picks.length; k += 1) {
       const f = path.join(outDir, `scene-${String(sceneNo).padStart(2, '0')}-${labels[k]}.png`);
       await renderStill({ composition, serveUrl, output: f, frame: picks[k], inputProps, timeoutInMilliseconds: 60000 });
       stills.push(f);
     }
+    stillsMs += Date.now() - tStills;
   }
 
   const video = path.join(outDir, draftVideoName(storyName));
+  const tStitch = Date.now();
   stitchScenes(sceneFiles, video);
+  const stitchMs = Date.now() - tStitch;
   const probe = probeVideo(video);
   const videoBytes = fs.statSync(video).size;
   const sheet = path.join(outDir, 'contact.png');
@@ -296,6 +325,14 @@ export async function main(argv = process.argv.slice(2)) {
     durationSeconds: probe.duration,
     msPerFrame: comparison.measuredMsPerFrame,
     estimateMsPerFrame: comparison.estimatedMsPerFrame,
+    voiceId,
+    timingBreakdown: {
+      setupMs, bundleMs,
+      sceneRenderMs: timing.reduce((s, t) => s + t.ms, 0),
+      stillsMs, stitchMs,
+      totalMs: Date.now() - startedAt,
+      note: 'setupMs + bundleMs are cold-start/one-off; scene ms/frame covers ONLY renderMedia, never the bundle.',
+    },
     timing,
     estimateComparison: comparison.rows,
     contactSheet: { path: path.relative(ROOT, sheet).replace(/\\/g, '/'), ...sheetInfo },
@@ -312,16 +349,26 @@ export async function main(argv = process.argv.slice(2)) {
     `scenes: ${scenes.join(', ')} (${estimateResult.resolution})`,
     `duration: ${probe.duration ?? 'unknown'} s; size: ${report.videoSizeMB} MB; bytes: ${videoBytes}`,
     `ffprobe: ${JSON.stringify(probe)}`,
+    `voice id actually used: ${voiceId}`,
+    `COLD START (separate — not charged to scene 1): setup ${setupMs} ms + bundle ${bundleMs} ms`,
+    `scene render total: ${timing.reduce((s, t) => s + t.ms, 0)} ms; stills ${stillsMs} ms; stitch ${stitchMs} ms; whole command ${report.timingBreakdown.totalMs} ms`,
     `measured: ${comparison.measuredMsPerFrame} ms/frame — film estimate: ${comparison.estimatedMsPerFrame} ms/frame (PREDICTION)`,
     ...comparison.rows.map((r) => `  scene ${r.scene}: ${r.measuredMsPerFrame} measured vs ${r.estimatedMsPerFrame} estimated (${r.ratio}x)`),
+    '',
+    'scene summary (render time only; cold start reported separately above)',
+    ...summaryTable(timing),
+    '',
     `still contact sheet: ${path.relative(ROOT, sheet).replace(/\\/g, '/')} (${sheetInfo.frames} stills, ${sheetInfo.cols}x${sheetInfo.rows})`,
     '',
     honesty,
   ].join('\n');
   fs.writeFileSync(path.join(outDir, 'REPORT.txt'), text, 'utf8');
 
-  console.log(`[film draft] DONE ${report.output} — ${report.durationSeconds ?? '?'}s, ${report.videoSizeMB} MB, ${comparison.measuredMsPerFrame} ms/frame`);
+  console.log(`[film draft] COLD START setup ${setupMs} ms + bundle ${bundleMs} ms (NOT charged to scene 1)`);
+  console.log(`[film draft] DONE ${report.output} — ${report.durationSeconds ?? '?'}s, ${report.videoSizeMB} MB, ${comparison.measuredMsPerFrame} ms/frame, voice=${voiceId}`);
   console.log(`[film draft] compare to film estimate: ${comparison.estimatedMsPerFrame} ms/frame predicted`);
+  console.log('[film draft] scene summary (render time only):');
+  for (const line of summaryTable(timing)) console.log(`  ${line}`);
   console.log(`[film draft] stills: ${stills.length}; contact: ${path.relative(ROOT, sheet).replace(/\\/g, '/')}`);
   console.log(honesty);
   return 0;
